@@ -110,6 +110,9 @@ def main():
                         action="store_true", default=False)
     parser.add_argument("--variant", help="Select standard build variant",
                         action="append", default=[])
+    parser.add_argument("--zircon-user-project-prefix",
+                        help="string prefixed to zircon user project name",
+                        dest="zircon_user_project_prefix", action="store")
     args = parser.parse_args()
 
     build_dir = os.path.join(paths.FUCHSIA_ROOT,
@@ -160,6 +163,9 @@ def main():
             gn_args.append("use_thinlto = false")
         elif args.thinlto_cache_dir:
             gn_args.append('thinlto_cache_dir="%s"' % args.thinlto_cache_dir)
+
+    if args.zircon_user_project_prefix:
+        gn_args.append('zircon_user_project_prefix="%s"' % args.zircon_user_project_prefix)
 
     zircon_cpu = {"x86-64": "x86-64", "aarch64": "arm64"}[args.target_cpu]
 
