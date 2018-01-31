@@ -81,14 +81,15 @@ config("toolchain_version_stamp") {
   # We want to force a recompile and relink of the world whenever our toolchain changes since
   # artifacts from an older version of the toolchain may or may not be compatible with newer ones.
   # To achieve this, we insert a synthetic define into the compile line.
-  if (host_os == "linux") {
-    clang_stamp_file = "//buildtools/linux64/clang.stamp"
-  } else if (host_os == "mac") {
-    clang_stamp_file = "//buildtools/mac/clang.stamp"
-  } else {
-    assert(false, "Unsupported host OS")
-  }
-  toolchain_version = read_file(clang_stamp_file, "trim string")
+  #if (host_os == "linux") {
+  #  clang_stamp_file = "//buildtools/linux64/clang.stamp"
+  #} else if (host_os == "mac") {
+  #  clang_stamp_file = "//buildtools/mac/clang.stamp"
+  #} else {
+  #  assert(false, "Unsupported host OS")
+  #}
+  #toolchain_version = read_file(clang_stamp_file, "trim string")
+  toolchain_version = "060bb6efa7ae7e5d52ab65f50b736a284ef2291d"
   defines = [ "TOOLCHAIN_VERSION=$toolchain_version" ]
 }
 
