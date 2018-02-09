@@ -5,7 +5,9 @@
 
 import argparse
 import errno
+import json
 import os
+import shutil
 import sys
 
 
@@ -41,17 +43,34 @@ def main():
     parser.add_argument('--depfile',
                         help='Path to the depfile to generate',
                         required=True)
+    parser.add_argument('--old-school',
+                        help='Turns the SDK into a big sysroot',
+                        action='store_true')
     args = parser.parse_args()
 
     if len(args.domains) != 1 and args.domains[0] != 'c-pp':
         print('Only the "c-pp" domain is supported at the moment.')
         return 1
 
-    # TODO(pylaligand): lay out a nice little SDK in the output directory.
-    dummy_path = os.path.join(args.out_dir, 'nothing_to_see_yet.txt')
-    make_dir(dummy_path)
-    with open(dummy_path, 'w') as dummy_file:
-        dummy_file.write('Told you, nothing to see here...\n')
+    # Remove any existing output.
+    shutil.rmtree(args.out_dir, True)
+
+    with open(args.manifest, 'r') as manifest_file:
+        manifest = json.load(manifest_file)
+    atoms = filter(lambda a: a['id']['domain'] == 'c-pp', manifest['atoms'])
+
+    def get_atom_dir(atom_name):
+        if args.old_school:
+            return os.path.join(args.out_dir, 'sysroot')
+        else:
+            return os.path.join(args.out_dir, 'pkg', atom_name)
+
+    for atom in atoms:
+        dir = get_atom_dir(atom['id']['name'])
+        for relative_destination, source in atom['files'].iteritems():
+            destination = os.path.join(dir, relative_destination)
+            make_dir(destination)
+            shutil.copyfile(source, destination)
 
     with open(args.depfile, 'w') as dep_file:
         dep_file.write('%s:\n' % args.depname)

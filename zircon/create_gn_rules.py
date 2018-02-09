@@ -10,7 +10,6 @@ import re
 import shutil
 import subprocess
 import sys
-import tempfile
 
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -82,13 +81,14 @@ def parse_package(lines):
     return result
 
 
-def extract_file(name, path, context):
+def extract_file(name, path, context, is_tool=False):
     """Extracts file path and base folder path from a map entry."""
     # name: foo/bar.h
     # path: <SOURCE|BUILD>/somewhere/under/zircon/foo/bar.h
     (full_path, changes) = re.subn('^SOURCE', context.source_base, path)
+    build_base = context.tool_build_base if is_tool else context.user_build_base
     if not changes:
-        (full_path, changes) = re.subn('^BUILD', context.build_base, path)
+        (full_path, changes) = re.subn('^BUILD', build_base, path)
     if not changes:
         raise Exception('Unknown pattern type: %s' % path)
     folder = None
@@ -145,6 +145,10 @@ def generate_source_library(package, context):
     data.deps += filter_deps(package.get('deps', []))
     data.deps += filter_deps(package.get('static-deps', []))
 
+    # Libraries.
+    if 'zircon' in package.get('deps', []):
+        data.libs.add('zircon')
+
     # Generate the build file.
     build_path = os.path.join(context.out_dir, 'lib', lib_name, 'BUILD.gn')
     generate_build_file(build_path, 'source_library.mako', data, context)
@@ -161,7 +165,6 @@ class CompiledLibrary(object):
         self.include_dirs = set()
         self.deps = []
         self.lib_name = ''
-        self.is_shared = False
         self.prebuilt = ''
         self.debug_prebuilt = ''
 
@@ -170,8 +173,6 @@ def generate_compiled_library(package, context):
     """Generates the build glue for a prebuilt library."""
     lib_name = package['package']['name']
     data = CompiledLibrary(lib_name)
-
-    # TODO(pylaligand): record and use the architecture.
 
     # Includes.
     for name, path in package.get('includes', {}).iteritems():
@@ -183,14 +184,14 @@ def generate_compiled_library(package, context):
     libs = package.get('lib', {})
     if len(libs) == 1:
         # Static library.
-        data.is_shared = False
+        is_shared = False
         (name, path) = libs.items()[0]
         (file, _) = extract_file(name, path, context)
         data.prebuilt = "//%s" % file
         data.lib_name = os.path.basename(file)
     elif len(libs) == 2:
         # Shared library.
-        data.is_shared = True
+        is_shared = True
         for name, path in libs.iteritems():
             (file, _) = extract_file(name, path, context)
             if '/debug/' in name:
@@ -206,8 +207,9 @@ def generate_compiled_library(package, context):
     data.deps += filter_deps(package.get('deps', []))
 
     # Generate the build file.
+    template = 'shared_library.mako' if is_shared else 'static_library.mako'
     build_path = os.path.join(context.out_dir, 'lib', lib_name, 'BUILD.gn')
-    generate_build_file(build_path, 'compiled_library.mako', data, context)
+    generate_build_file(build_path, template, data, context)
 
 
 class Sysroot(object):
@@ -238,13 +240,42 @@ def generate_sysroot(package, context):
     generate_build_file(build_path, 'sysroot.mako', data, context)
 
 
+class HostTool(object):
+    """Represents a host tool.
+
+       Convenience storage object to be consumed by Mako templates."""
+
+    def __init__(self, name):
+        self.name = name
+        self.executable = ''
+
+
+def generate_host_tool(package, context):
+    """Generates the build glue for a host tool."""
+    name = package['package']['name']
+    data = HostTool(name)
+
+    bins = package.get('bin', {})
+    if len(bins) != 1 or name not in bins:
+        raise Exception('Host tool %s has unexpected binaries %s.'
+                        % (name, bins))
+    (file, _) = extract_file(name, bins[name], context, is_tool=True)
+    data.executable = '//%s' % file
+
+    # Generate the build file.
+    build_path = os.path.join(context.out_dir, 'tool', name, 'BUILD.gn')
+    generate_build_file(build_path, 'host_tool.mako', data, context)
+
+
 class GenerationContext(object):
     """Describes the context in which GN rules should be generated."""
 
-    def __init__(self, out_dir, source_base, build_base, templates):
+    def __init__(self, out_dir, source_base, user_build_base, tool_build_base,
+                 templates):
         self.out_dir = out_dir
         self.source_base = source_base
-        self.build_base = build_base
+        self.user_build_base = user_build_base
+        self.tool_build_base = tool_build_base
         self.templates = templates
 
 
@@ -253,8 +284,14 @@ def main():
     parser.add_argument('--out',
                         help='Path to the output directory',
                         required=True)
-    parser.add_argument('--zircon-build',
-                        help='Path to the Zircon build directory',
+    parser.add_argument('--staging',
+                        help='Path to the staging directory',
+                        required=True)
+    parser.add_argument('--zircon-user-build',
+                        help='Path to the Zircon "user" build directory',
+                        required=True)
+    parser.add_argument('--zircon-tool-build',
+                        help='Path to the Zircon "tools" build directory',
                         required=True)
     parser.add_argument('--debug',
                         help='Whether to print out debug information',
@@ -262,12 +299,14 @@ def main():
     args = parser.parse_args()
 
     out_dir = os.path.abspath(args.out)
-    if os.path.exists(out_dir):
-        shutil.rmtree(out_dir)
+    shutil.rmtree(os.path.join(out_dir, 'lib'), True)
+    shutil.rmtree(os.path.join(out_dir, 'sysroot'), True)
+    shutil.rmtree(os.path.join(out_dir, 'tool'), True)
     debug = args.debug
 
     # Generate package descriptions through Zircon's build.
-    zircon_dir = tempfile.mkdtemp('-zircon-packages')
+    zircon_dir = args.staging
+    shutil.rmtree(zircon_dir, True)
     if debug:
         print('Building Zircon in: %s' % zircon_dir)
     make_args = [
@@ -275,9 +314,15 @@ def main():
         'packages',
         'BUILDDIR=%s' % zircon_dir,
     ]
-    subprocess.check_call(make_args, cwd=ZIRCON_ROOT,
-                          env={} if debug else {'QUIET': '1'})
 
+    env = {}
+    if sys.platform == 'darwin':
+        # The Darwin bash does not know the path to its built-in commands in an
+        # empty environment. Thus, we always pass the PATH.
+        env['PATH'] = os.environ['PATH']
+    if not debug:
+        env['QUIET'] = '1'
+    subprocess.check_call(make_args, cwd=ZIRCON_ROOT, env=env)
     # Parse package definitions.
     packages = []
     with open(os.path.join(zircon_dir, 'export', 'manifest'), 'r') as manifest:
@@ -291,14 +336,12 @@ def main():
         for name in names:
             print(' - %s' % name)
 
-    if not debug:
-        shutil.rmtree(zircon_dir)
-
     # Generate some GN glue for each package.
     context = GenerationContext(
         out_dir,
         ZIRCON_ROOT,
-        os.path.abspath(args.zircon_build),
+        os.path.abspath(args.zircon_user_build),
+        os.path.abspath(args.zircon_tool_build),
         TemplateLookup(directories=[SCRIPT_DIR]),
     )
     for package in packages:
@@ -312,16 +355,19 @@ def main():
         if name in SYSROOT_PACKAGES:
             print('Ignoring sysroot part: %s' % name)
             continue
-        if type != 'lib':
+        if type == 'tool':
+            generate_host_tool(package, context)
+        elif type == 'lib':
+            if arch == 'src':
+                type = 'source'
+                generate_source_library(package, context)
+            else:
+                type = 'prebuilt'
+                generate_compiled_library(package, context)
+        else:
             print('(%s) Unsupported package type: %s/%s, skipping'
                   % (name, type, arch))
             continue
-        if arch == 'src':
-            type = 'source'
-            generate_source_library(package, context)
-        else:
-            type = 'prebuilt'
-            generate_compiled_library(package, context)
         if debug:
             print('Processed %s (%s)' % (name, type))
 

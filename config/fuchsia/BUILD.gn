@@ -3,8 +3,12 @@
 # found in the LICENSE file.
 
 import("//build/config/sysroot.gni")
+import("//build/gn/config.gni")
 import("//build/toolchain/ccache.gni")
 import("//build/toolchain/clang_toolchain.gni")
+
+# OpenTrustGroup specific configs
+import("//build/otg/config.gni")
 
 assert(current_os == "fuchsia")
 
@@ -81,16 +85,10 @@ config("toolchain_version_stamp") {
   # We want to force a recompile and relink of the world whenever our toolchain changes since
   # artifacts from an older version of the toolchain may or may not be compatible with newer ones.
   # To achieve this, we insert a synthetic define into the compile line.
-  #if (host_os == "linux") {
-  #  clang_stamp_file = "//buildtools/linux64/clang.stamp"
-  #} else if (host_os == "mac") {
-  #  clang_stamp_file = "//buildtools/mac/clang.stamp"
-  #} else {
-  #  assert(false, "Unsupported host OS")
-  #}
-  #toolchain_version = read_file(clang_stamp_file, "trim string")
-  toolchain_version = "060bb6efa7ae7e5d52ab65f50b736a284ef2291d"
-  defines = [ "TOOLCHAIN_VERSION=$toolchain_version" ]
+  cipd_version = read_file(
+          "//buildtools/${host_platform}/clang/.versions/clang.cipd_version",
+          "json")
+  defines = [ "TOOLCHAIN_VERSION=${cipd_version.instance_id}" ]
 }
 
 config("compiler_sysroot") {
@@ -124,6 +122,11 @@ config("shared_library_config") {
 
 config("fdio_config") {
   libs = [ "fdio" ]
+
+  # TODO(pylaligand): find a better way to let executables link in fdio.
+  # Ideally their dependencies should be set up in such a way that it would get
+  # inherited from them.
+  lib_dirs = [ "//out/build-zircon/build-${zircon_user_project}-${zircon_cpu}/system/ulib/fdio" ]
 }
 
 config("executable_config") {

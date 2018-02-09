@@ -95,6 +95,8 @@ def main():
                         action="store_const", const="release")
     parser.add_argument("--build-dir",
                         help="the directory (relative to FUCHSIA_DIR) into which to generate the build")
+    parser.add_argument("--ide",
+                        help="An IDE value to pass to gn")
     parser.add_argument("--target_cpu", "-t", help="Target CPU",
                         default="x86-64", choices=['x86-64', 'aarch64'])
     parser.add_argument("--goma", help="use goma", metavar="GOMADIR",
@@ -105,9 +107,6 @@ def main():
                         const='thin', choices=['full', 'thin'],
                         default=None, help="use link time optimization (LTO)")
     parser.add_argument("--thinlto-cache-dir", help="ThinLTO cache directory")
-    parser.add_argument("--ignore-skia",
-                        help="Disable Skia settings - for Skia-less builds",
-                        action="store_true", default=False)
     parser.add_argument("--variant", help="Select standard build variant",
                         action="append", default=[])
     args = parser.parse_args()
@@ -123,24 +122,14 @@ def main():
         else:
             gn_command.append("--list")
     else:
-        gn_command = ["gen", build_dir, "--check"]
+        # TODO(TO-734): reenable --check.
+        gn_command = ["gen", build_dir]
 
     cpu_map = {"x86-64":"x64", "aarch64":"arm64"}
     gn_args = [
         'target_cpu="%s"' % cpu_map[args.target_cpu],
         'fuchsia_packages="%s"' % args.packages,
     ]
-
-    if not args.ignore_skia:
-        # Disable some Skia features not needed for host builds.
-        # This is needed in order to build the Flutter shell.
-        gn_args += [
-            "skia_enable_flutter_defines=true",
-            "skia_use_dng_sdk=false",
-            "skia_use_fontconfig=false",
-            "skia_use_libwebp=false",
-            "skia_use_sfntly=false",
-        ]
 
     if args.build_type == "release":
         gn_args.append("is_debug=false")
@@ -214,6 +203,8 @@ def main():
     gn_args += args.gn_args
 
     gn_command.append('--args=' + ' '.join(gn_args))
+    if args.ide:
+        gn_command.append('--ide=' + args.ide)
     return subprocess.call([paths.GN_PATH] + gn_command)
 
 

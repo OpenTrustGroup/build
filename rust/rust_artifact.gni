@@ -2,11 +2,14 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//build/config/sysroot.gni")
 import("//build/toolchain/clang_toolchain.gni")
 
 declare_args() {
+  # Allows Cargo.lock to be updated when performing local builds.
   use_frozen_with_cargo = true
+  # Sets a custom base directory for `rustc` and `cargo`.
+  # This can be used to test custom Rust toolchains.
+  rustc_prefix = "//buildtools/${host_platform}/rust/bin"
 }
 
 # Defines a Rust artifact
@@ -62,8 +65,6 @@ template("rust_artifact") {
       target_triple = "aarch64-unknown-fuchsia"
     }
   }
-
-  rust_base = "//buildtools/${host_os}-${host_cpu}/rust"
 
   if (is_debug) {
     build_type = "debug"
@@ -144,6 +145,7 @@ template("rust_artifact") {
 
     inputs = [
       "${source_dir}/Cargo.toml",
+      "//garnet/Cargo.lock",
     ]
 
     outputs = [
@@ -171,9 +173,9 @@ template("rust_artifact") {
              "--crate-root",
              rebase_path(source_dir),
              "--cargo",
-             rebase_path("$rust_base/bin/cargo"),
+             rebase_path("$rustc_prefix/cargo"),
              "--rustc",
-             rebase_path("$rust_base/bin/rustc"),
+             rebase_path("$rustc_prefix/rustc"),
              "--target-triple",
              target_triple,
              "--label",
@@ -206,11 +208,15 @@ template("rust_artifact") {
     }
 
     if (is_fuchsia) {
+      deps += [
+        "//garnet/public/sdk:zircon_sysroot_export",
+      ]
+
       args += [
         "--clang_prefix",
         rebase_path(clang_prefix, "", root_out_dir),
         "--sysroot",
-        rebase_path(sysroot),
+        rebase_path("$root_out_dir/sdks/zircon_sysroot/sysroot"),
       ]
     }
   }

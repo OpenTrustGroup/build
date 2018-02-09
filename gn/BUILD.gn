@@ -3,80 +3,16 @@
 # found in the LICENSE file.
 
 import("//build/config/fuchsia/bootdata.gni")
+import("//build/gn/config.gni")
 import("//build/gn/packages.gni")
+import("//build/package.gni")
 import("//build/toolchain/clang_toolchain.gni")
 
 # OpenTrustGroup specific configs
 import("//build/otg/config.gni")
 
-declare_args() {
-  # Manifest files describing target libraries from toolchains.
-  # TODO(TO-471): This is ignored as a build argument and overridden below.
-  toolchain_manifests = [ "${clang_prefix}/../lib/${clang_target}.manifest" ]
-
-  # Groups to include from the Zircon /boot manifest into /boot.
-  # This is either "all" or a comma-separated list of one or more of:
-  #   core -- necessary to boot
-  #   misc -- utilities in /bin
-  #   test -- test binaries in /bin and /test
-  zircon_boot_groups = "core"
-
-  # A list of labels for `bootdata` targets (see //build/bootdata.gni)
-  # to roll into the final bootable image.  These targets must use the
-  # default `output_name` and `output_extension`.
-  extra_bootdata = []
-
-  # File containing kernel command line arguments to roll into the
-  # bootdata image used for booting.
-  kernel_cmdline_file = ""
-
-  # A list of platforms, i.e. different Zircon kernels that were built.
-  # There will be a different `bootdata-${platform}.bin` built for each.
-  if (target_cpu == "x64") {
-    zircon_platforms = [ "x86" ]
-  } else {
-    zircon_platforms = [ target_cpu ]
-  }
-
-  # The package key to use for signing the system package. New keys can be
-  # generated with the `pm` host command.
-  system_package_key = "//build/development.key"
-
-  # The size of the minfs data partition image to create. Normally this image
-  # is added to FVM, and can therefore expand as needed. It must be at least
-  # 10mb (the default) in order to be succesfully initialized.
-  data_image_size = "10m"
-
-  # Build boot images that prefer Zedboot over local boot.
-  always_zedboot = false
-
-  # Whether to automatically generate BUILD.gn files for Zircon artifacts.
-  generate_zircon_gn_files = false
-}
-
-declare_args() {
-  # Groups to include from the Zircon /boot manifest into /system
-  # (instead of into /boot like Zircon's own bootdata.bin does).
-  # Should not include any groups that are also in zircon_boot_groups,
-  # which see.  If zircon_boot_groups is "all" then this should be "".
-  if (zircon_boot_groups == "all") {
-    zircon_system_groups = ""
-  } else {
-    # TODO(mcgrathr): Could default to "" for !is_debug, or "production
-    # build".  Note including "test" here places all of Zircon's tests
-    # into /system/test, which means that Fuchsia bots run those tests
-    # too.
-    zircon_system_groups = "misc,test"
-  }
-}
-
-if (zircon_boot_groups == "all") {
-  assert(zircon_system_groups == "",
-         "zircon_boot_groups already has everything")
-} else {
-  assert(zircon_system_groups != "all" && zircon_system_groups != "core",
-         "zircon_system_groups cannot include core (or all)")
-}
+# Permit dependencies on testonly targets from packages.
+testonly = true
 
 # TODO(TO-471): The toolchain package will provide this file
 # but it doesn't yet, so generate it with this kludge.
@@ -105,45 +41,6 @@ action("generate_clang_toolchain_manifest") {
   ]
 }
 
-# Permit dependencies on testonly targets from packages.
-testonly = true
-
-if (current_cpu == "x64") {
-  zircon_cpu = "x86-64"
-} else {
-  zircon_cpu = current_cpu
-}
-
-zircon_boot_manifest =
-    "//out/build-zircon/build-${zircon_user_project}-${zircon_cpu}/bootfs.manifest"
-zircon_ulib_manifest =
-    "//out/build-zircon/build-${zircon_user_project}-${zircon_cpu}-ulib/bootfs.manifest"
-
-final_boot_manifest = "$root_out_dir/boot.manifest"
-final_system_manifest = "$root_out_dir/system.manifest"
-
-# pkgsvr_index is the static packages index for the package server, it contains
-# all package content addresses that are added to the blobstore during the
-# build.
-pkgsvr_index = "$root_gen_dir/pkgsvr_index"
-packages_dir = "$root_build_dir/package"
-# Packages blobs manifest is all the blobs from inside all Fuchsia packages, as well as their meta.fars.
-packages_blobs_manifest = "$root_build_dir/packages_blobs.manifest"
-# Final blobstore manifest is the packages_blobs_manifest.
-final_blobstore_manifest = "$root_build_dir/blobstore.manifest"
-
-# Keep the following in sync with the values in
-#   //scripts/devshell/lib/image_build_vars.sh
-images_dir = "$root_out_dir/images"
-system_package_dir = "$root_gen_dir/system.pkg"
-system_package_meta_far = "$system_package_dir/meta.far"
-system_package_cmdline = "$images_dir/cmdline.txt"
-blobstore_image_path = "$images_dir/blobstore.blk"
-data_image_path = "$images_dir/data.blk"
-fvm_image_path = "$images_dir/fvm.blk"
-fvm_sparse_image_path = "$images_dir/fvm.sparse.blk"
-fvm_data_sparse_image_path = "$images_dir/fvm.data.sparse.blk"
-
 finalize_manifests_extra = [
   "elfinfo.py",
   "manifest.py",
@@ -152,7 +49,10 @@ finalize_manifests_extra = [
 ]
 
 action("finalize_manifests") {
-  visibility = [ ":*" ]
+  visibility = [
+    ":*",
+    "//build/bootfs:*",
+  ]
 
   packages_file = "$target_gen_dir/packages"
   system_manifest_file = "$target_gen_dir/system.bootfs.manifest"
@@ -168,12 +68,10 @@ action("finalize_manifests") {
                        fuchsia_packages,
                        "--build-root",
                        rebase_path(root_build_dir),
-                       "--arch",
-                       target_cpu,
                      ],
-                     "list lines",
+                     "trim list lines",
                      rebase_path(packages_imported))
-  package_list = read_file(packages_file, "list lines")
+  package_list = read_file(packages_file, "trim list lines")
 
   script = "finalize_manifests.py"
   inputs = finalize_manifests_extra
@@ -255,7 +153,7 @@ action("finalize_manifests") {
     # action.  We're relying on the depfile to notice their changes.
     #sources += [ package_manifest ]
 
-    args += [ "--optional-manifest=" + rebase_path(package_manifest) ]
+    args += [ "--optional-manifest=" + rebase_path(package_manifest, root_build_dir) ]
   }
 
   foreach(package, package_list) {
@@ -270,7 +168,7 @@ action("finalize_manifests") {
     outputs += [ final_manifest ]
     args += [
       "--standalone-output=" + rebase_path(final_manifest, root_build_dir),
-      "--manifest=" + rebase_path(package_manifest),
+      "--manifest=" + rebase_path(package_manifest, root_build_dir),
     ]
   }
 
@@ -286,7 +184,7 @@ action("finalize_manifests") {
     outputs += [ final_manifest ]
     args += [
       "--standalone-output=" + rebase_path(final_manifest, root_build_dir),
-      "--manifest=" + rebase_path(package_manifest),
+      "--manifest=" + rebase_path(package_manifest, root_build_dir),
     ]
   }
 }
@@ -299,16 +197,29 @@ action("pkgbuilds") {
   pm_out_dir = get_label_info(pm_label, "root_out_dir")
   pm_path = "$pm_out_dir/pm"
 
+  amber_publish_label = "//garnet/go/src/amber:amber-publish($host_toolchain)"
+
+  amber_publish_out_dir = get_label_info(amber_publish_label, "root_out_dir")
+  amber_publish_path = "$amber_publish_out_dir/amber-publish"
+
   merkleroot_bin = "//out/build-zircon/tools/merkleroot"
 
   package_signing_key = system_package_key
 
-  deps = [ pm_label, ":finalize_manifests" ]
+  deps = [
+    amber_publish_label,
+    # TODO(raggi): cleanup these files, they shouldn't be in the root_build_dir
+    "//garnet/go/src/amber:amber-srv-keys",
+    pm_label,
+    ":finalize_manifests"
+  ]
   inputs = [
     pm_path,
+    amber_publish_path,
     package_signing_key,
     merkleroot_bin,
   ]
+
   # XXX(raggi): packages_file is an input, but it's made by gen.py
   sources = [
     "build_all_fuchsia_packages.py",
@@ -317,6 +228,7 @@ action("pkgbuilds") {
   outputs = [
     packages_blobs_manifest,
     pkgsvr_index,
+    "$root_out_dir/amber-files/repository/targets.json"
   ]
 
   script = "//build/gn_run_binary.sh"
@@ -346,6 +258,17 @@ action("pkgbuilds") {
     rebase_path(packages_blobs_manifest),
     "--pkgsvr-index",
     rebase_path(pkgsvr_index),
+    "--amber-publish",
+    rebase_path(amber_publish_path),
+    "--amber-repo",
+    # TODO(raggi): re-arrange and formalize these paths:
+    rebase_path("$root_out_dir/amber-files"),
+    "--amber-keys",
+    rebase_path("$root_out_dir"),
+    "--amber-package-list",
+    rebase_path("$root_gen_dir/amber-package-list"),
+    "--amber-blobs-manifest",
+    rebase_path("$root_gen_dir/amber-blobs-manifest"),
   ]
 }
 
@@ -506,16 +429,6 @@ foreach(platform, zircon_platforms) {
   }
 }
 
-# Package up the /system filesystem.
-bootdata("system_bootfs") {
-  deps = [
-    ":finalize_manifests",
-  ]
-  inputs = [
-    final_system_manifest,
-  ]
-}
-
 # data.blk creates an empty but initialized minfs data partition. The partition
 # is included in fvm.data.sparse.blk.
 action("data.blk") {
@@ -600,6 +513,8 @@ action("fvm.sparse.blk") {
     rebase_path(fvm_path),
     rebase_path(fvm_sparse_image_path),
     "sparse",
+    "--compress",
+    "lz4",
     "--blobstore",
     rebase_path(blobstore_image_path),
   ]
@@ -627,6 +542,8 @@ action("fvm.data.sparse.blk") {
     rebase_path(fvm_path),
     rebase_path(fvm_data_sparse_image_path),
     "sparse",
+    "--compress",
+    "lz4",
     "--data",
     rebase_path(data_image_path),
   ]
@@ -659,6 +576,7 @@ template("vboot") {
     kernel_keyblock = "$vboot_dir/tests/devkeys/kernel.keyblock"
     private_keyblock = "$vboot_dir/tests/devkeys/kernel_data_key.vbprivk"
     inputs = [
+      futility_bin,
       kernel_keyblock,
       private_keyblock,
     ]
@@ -667,6 +585,7 @@ template("vboot") {
     foreach(bootdata_label, invoker.deps) {
       bootdata_bins += get_target_outputs(bootdata_label)
     }
+    inputs += bootdata_bins
     deps += invoker.deps
 
     bootdata_bin = bootdata_bins[0]
@@ -674,6 +593,7 @@ template("vboot") {
 
     kernel_build_dir = "//out/build-zircon/build-${invoker.platform}"
     zircon_bin = "$kernel_build_dir/zircon.bin"
+    inputs += [ zircon_bin ]
 
     output = "$images_dir/$output_name"
     outputs = [
@@ -1010,58 +930,31 @@ group("images") {
   }
 }
 
-# DEPRECATED
-# Roll those together into the image for booting with /system from RAM disk.
-bootdata("mkbootfs") {
-  output_name = "user"
-  output_extension = "bootfs"
-  deps = [
-    ":bootdata-${zircon_platforms[0]}",
-    ":system_bootfs",
-  ]
-  inputs = []
-  foreach(label, deps) {
-    inputs += get_target_outputs(label)
-  }
-  deps += extra_bootdata
-  foreach(label, extra_bootdata) {
-    # get_target_outputs only works on labels defined in the same file.
-    # So just assume each `bootdata` target used the defaults so its
-    # output file is computable directly from the target name.
-    inputs += [ "$root_out_dir/" + get_label_info(label, "name") + ".bin" ]
-  }
-}
+zircon_files =
+    exec_script("//build/zircon/list_source_files.py", [], "list lines")
 
-group("bootfs") {
-  deps = [
-    ":mkbootfs",
-  ]
-  foreach(platform, zircon_platforms) {
-    deps += [ ":bootdata-${platform}" ]
-  }
-}
+supporting_templates = [
+  "//build/zircon/header.mako",
+  "//build/zircon/host_tool.mako",
+  "//build/zircon/shared_library.mako",
+  "//build/zircon/source_library.mako",
+  "//build/zircon/static_library.mako",
+  "//build/zircon/sysroot.mako",
+]
 
-if (generate_zircon_gn_files) {
-  zircon_files =
-      exec_script("//build/zircon/list_source_files.py", [], "list lines")
-
-  supporting_templates = [
-    "//build/zircon/compiled_library.mako",
-    "//build/zircon/header.mako",
-    "//build/zircon/source_library.mako",
-    "//build/zircon/sysroot.mako",
-  ]
-
-  exec_script("//build/zircon/create_gn_rules.py",
-              [
-                "--out",
-                rebase_path("//zircon/public"),
-                "--zircon-build",
-                rebase_path("//out/build-zircon/build-${zircon_user_project}-${zircon_cpu}"),
-              ],
-              "",
-              zircon_files + supporting_templates)
-}
+exec_script("//build/zircon/create_gn_rules.py",
+            [
+              "--out",
+              rebase_path("//zircon/public"),
+              "--staging",
+              rebase_path("$root_out_dir/zircon-gn"),
+              "--zircon-user-build",
+              rebase_path("//out/build-zircon/build-${zircon_user_project}-\${zircon_cpu}"),
+              "--zircon-tool-build",
+              rebase_path("//out/build-zircon"),
+            ],
+            "",
+            zircon_files + supporting_templates)
 
 group("default") {
   deps = [ ":images" ] + packages_labels

@@ -20,6 +20,14 @@ import("sdk_molecule.gni")
 #     on an official SDK.
 #     Defaults to false.
 #
+#   old_school (optional)
+#     If `export` is true, controls the layout of the produced SDK.
+#     An old-school SDK will essentially be a sysroot containing all the
+#     C/C++ packages.
+#     Note: this is a stop-gap measure to port runtimes to the new sysroot
+#     shape.
+#     Defaults to true.
+#
 #   domains (optional)
 #     If `export` is true, specifies the domains of SDK elements to export.
 #     Only the "c-pp" domain is currently supported.
@@ -30,19 +38,38 @@ template("sdk") {
   copy_target_name = "${target_name}_copy"
   verification_target_name = "${target_name}_verify"
 
+  if (!is_fuchsia) {
+    assert(false, "SDKs can only target Fuchsia")
+  }
+  if (target_cpu == "x64") {
+    compiler_triple = "x86_64-fuchsia"
+  } else if (target_cpu == "arm64") {
+    compiler_triple = "aarch64-fuchsia"
+  } else {
+    assert(false, "Unrecognized CPU: $target_cpu")
+  }
+
   # Generates the manifest.
   sdk_molecule(generation_target_name) {
     forward_variables_from(invoker, "*", [
       "domains",
       "export",
+      "old_school",
     ])
+
+    metadata = [
+      {
+        key = "arch"
+        value = compiler_triple
+      }
+    ]
   }
 
   sdk_name = target_name
   if (defined(invoker.name)) {
     sdk_name = invoker.name
   }
-  final_manifest_file = "$root_out_dir/sdks/$sdk_name"
+  final_manifest_file = "$root_out_dir/sdk-manifests/$sdk_name"
 
   # Copies the manifest to a central location.
   copy(copy_target_name) {
@@ -105,7 +132,7 @@ template("sdk") {
       script = "//build/sdk/export_sdk.py"
 
       inputs = [
-        manifest_file,
+        final_manifest_file,
       ]
 
       depfile = "$stamp_file.d"
@@ -116,7 +143,7 @@ template("sdk") {
 
       args = [
         "--out-dir",
-        rebase_path("$root_out_dir/sdks/$target_name"),
+        rebase_path("$root_out_dir/sdks/$sdk_name"),
         "--stamp-file",
         rebase_path(stamp_file),
         "--manifest",
@@ -129,13 +156,23 @@ template("sdk") {
         rebase_path(stamp_file, root_build_dir),
       ]
 
+      if (invoker.old_school) {
+        args += [
+          "--old-school",
+        ]
+      }
+
       deps = [
-        ":$main_target_name",
+        ":$copy_target_name",
+        ":$verification_target_name",
       ]
     }
   } else { # Not exported.
     if (defined(invoker.domains)) {
       assert(false, "A domain list may only be set if export = true.")
+    }
+    if (defined(invoker.old_school)) {
+      assert(false, "Only exported SDKs may be old-school.")
     }
   }
 }
