@@ -80,8 +80,6 @@ def main():
                         nargs='?', const=True, default=False,
                         help="Show GN build arguments usable in --args",
                         metavar="BUILDARG")
-    parser.add_argument("--platforms", "-P",
-                        help="comma-separated list of platforms")
     parser.add_argument("--packages", "-p",
                         help="comma separated list of packages",
                         required=True)
@@ -98,7 +96,7 @@ def main():
     parser.add_argument("--ide",
                         help="An IDE value to pass to gn")
     parser.add_argument("--target_cpu", "-t", help="Target CPU",
-                        default="x86-64", choices=['x86-64', 'aarch64'])
+                        default="x64", choices=['x64', 'arm64'])
     parser.add_argument("--goma", help="use goma", metavar="GOMADIR",
                         nargs='?', const=True, default=False)
     parser.add_argument("--ccache", "-c", help="use ccache",
@@ -122,12 +120,10 @@ def main():
         else:
             gn_command.append("--list")
     else:
-        # TODO(TO-734): reenable --check.
-        gn_command = ["gen", build_dir]
+        gn_command = ["gen", build_dir, "--check"]
 
-    cpu_map = {"x86-64":"x64", "aarch64":"arm64"}
     gn_args = [
-        'target_cpu="%s"' % cpu_map[args.target_cpu],
+        'target_cpu="%s"' % args.target_cpu,
         'fuchsia_packages="%s"' % args.packages,
     ]
 
@@ -149,12 +145,6 @@ def main():
             gn_args.append("use_thinlto = false")
         elif args.thinlto_cache_dir:
             gn_args.append('thinlto_cache_dir="%s"' % args.thinlto_cache_dir)
-
-    zircon_cpu = {"x86-64": "x86-64", "aarch64": "arm64"}[args.target_cpu]
-
-    if args.platforms:
-        gn_args.append('zircon_platforms=[%s]' % ', '.join(
-            ['"%s"' % platform for platform in args.platforms.split(',')]))
 
     select_variants = []
     bad_variants = []

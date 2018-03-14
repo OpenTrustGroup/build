@@ -2,44 +2,48 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//build/config/clang/clang.gni")
 import("//build/config/fuchsia/bootdata.gni")
+import("//build/config/fuchsia/zircon.gni")
 import("//build/gn/config.gni")
 import("//build/gn/packages.gni")
 import("//build/package.gni")
-import("//build/toolchain/clang_toolchain.gni")
+
+zircon_files =
+    exec_script("//build/zircon/list_source_files.py", [], "list lines")
+
+supporting_templates = [
+  "//build/zircon/boards.mako",
+  "//build/zircon/header.mako",
+  "//build/zircon/host_tool.mako",
+  "//build/zircon/main.mako",
+  "//build/zircon/shared_library.mako",
+  "//build/zircon/source_library.mako",
+  "//build/zircon/static_library.mako",
+  "//build/zircon/sysroot.mako",
+]
+
+exec_script("//build/zircon/create_gn_rules.py",
+            [
+              "--out",
+              rebase_path("//zircon/public"),
+              "--staging",
+              rebase_path("$root_out_dir/zircon-gn"),
+              "--zircon-user-build",
+              rebase_path("//out/build-zircon/build-\${target_cpu}"),
+              "--zircon-tool-build",
+              rebase_path("//out/build-zircon"),
+            ],
+            "",
+            zircon_files + supporting_templates)
+
+import("//zircon/public/config/boards.gni")
 
 # OpenTrustGroup specific configs
 import("//build/otg/config.gni")
 
 # Permit dependencies on testonly targets from packages.
 testonly = true
-
-# TODO(TO-471): The toolchain package will provide this file
-# but it doesn't yet, so generate it with this kludge.
-toolchain_manifests[0] = "${root_out_dir}/clang_toolchain.manifest"
-action("generate_clang_toolchain_manifest") {
-  script = "toolchain_manifest.py"
-  outputs = [
-    toolchain_manifests[0],
-  ]
-  inputs = [
-    "${clang_prefix}/clang",
-  ]
-  args = [
-    "--output",
-    rebase_path(outputs[0]),
-    "--prefix=$clang_prefix",
-    "--target=$clang_target",
-    "libc++.so.2",
-    "libc++abi.so.1",
-    "libunwind.so.1",
-    "asan/libc++.so.2",
-    "asan/libc++abi.so.1",
-    "asan/libunwind.so.1",
-    "libclang_rt.asan-${clang_cpu}.so",
-    "libclang_rt.ubsan_standalone-${clang_cpu}.so",
-  ]
-}
 
 finalize_manifests_extra = [
   "elfinfo.py",
@@ -58,20 +62,19 @@ action("finalize_manifests") {
   system_manifest_file = "$target_gen_dir/system.bootfs.manifest"
   build_id_file = "$root_out_dir/ids.txt"
 
-  deps = exec_script("process_build_packages.py",
-                     [
-                       "--targets-file",
-                       rebase_path(packages_file),
-                       "--system-manifest",
-                       rebase_path(system_manifest_file),
-                       "--packages",
-                       fuchsia_packages,
-                       "--build-root",
-                       rebase_path(root_build_dir),
-                     ],
-                     "trim list lines",
-                     rebase_path(packages_imported))
-  package_list = read_file(packages_file, "trim list lines")
+  _result = exec_script("process_build_packages.py",
+                        [
+                          "--targets-file",
+                          rebase_path(packages_file),
+                          "--system-manifest",
+                          rebase_path(system_manifest_file),
+                          "--packages",
+                          fuchsia_packages,
+                          "--build-root",
+                          rebase_path(root_build_dir),
+                        ],
+                        "scope",
+                        rebase_path(packages_imported))
 
   script = "finalize_manifests.py"
   inputs = finalize_manifests_extra
@@ -83,8 +86,9 @@ action("finalize_manifests") {
     build_id_file,
   ]
 
+  deps = _result.deps
   sources = []
-  args = [
+  response_file_args = [
     "--depfile=" + rebase_path(depfile, root_build_dir),
     "--build-id-file=" + rebase_path(build_id_file, root_build_dir),
   ]
@@ -92,47 +96,67 @@ action("finalize_manifests") {
   # First the toolchain and Zircon "ulib" manifests are pure auxiliaries:
   # they just supply libraries that might satisfy dependencies.
 
-  # TODO(TO-471): Remove this when toolchain_manifests are in the source tree.
-  deps += [ ":generate_clang_toolchain_manifest" ]
-
   sources += toolchain_manifests
   foreach(manifest, toolchain_manifests) {
     manifest_cwd = get_path_info(rebase_path(manifest), "dir")
-    args += [
+    response_file_args += [
       "--cwd=$manifest_cwd",
       "--manifest=" + rebase_path(manifest),
     ]
   }
 
-  sources += [ zircon_ulib_manifest ]
-  zircon_manifest_cwd = rebase_path("//out/build-zircon")
-  args += [
-    "--cwd=$zircon_manifest_cwd",
-    "--manifest=" + rebase_path(zircon_ulib_manifest),
-  ]
+  sources += zircon_aux_manifests
+  foreach(manifest, zircon_aux_manifests) {
+    manifest_cwd = get_path_info(rebase_path(manifest), "dir") + "/.."
+    response_file_args += [
+      "--cwd=$manifest_cwd",
+      "--manifest=" + rebase_path(manifest),
+    ]
+  }
 
   # Next, everything that will go into the final /boot manifest.
-  args += [ "--output=" + rebase_path(final_boot_manifest, root_build_dir) ]
-
-  sources += [ zircon_boot_manifest ]
-  args += [
-    "--cwd=$zircon_manifest_cwd",
+  response_file_args += [
+    "--output=" + rebase_path(final_boot_manifest, root_build_dir),
     "--groups=$zircon_boot_groups",
-    "--manifest=" + rebase_path(zircon_boot_manifest),
+  ]
+  sources += zircon_boot_manifests
+  foreach(manifest, zircon_boot_manifests) {
+    manifest_cwd = get_path_info(rebase_path(manifest), "dir") + "/.."
+    response_file_args += [
+      "--cwd=$manifest_cwd",
+      "--manifest=" + rebase_path(manifest),
+    ]
+  }
 
-    # All the manifests generated by this build are relative to root_build_dir.
+  # All the manifests generated by this build are relative to root_build_dir.
+  response_file_args += [
     "--cwd=.",
     "--groups=all",
   ]
 
-  # Finally, everything that will go into the final /system manifest.
-  args += [
-    "--output=" + rebase_path(final_system_manifest, root_build_dir),
-    "--cwd=$zircon_manifest_cwd",
-    "--groups=$zircon_system_groups",
-    "--manifest=" + rebase_path(zircon_boot_manifest),
+  foreach(package, _result.packages) {
+    package_manifest = "$root_build_dir/package/$package/boot_manifest"
 
-    # All the manifests generated by this build are relative to root_build_dir.
+    sources += [ package_manifest ]
+
+    response_file_args += [ "--manifest=" + rebase_path(package_manifest, root_build_dir) ]
+  }
+
+  # Finally, everything that will go into the final /system manifest.
+  response_file_args += [
+    "--output=" + rebase_path(final_system_manifest, root_build_dir),
+    "--groups=$zircon_system_groups",
+  ]
+  foreach(manifest, zircon_boot_manifests) {
+    manifest_cwd = get_path_info(rebase_path(manifest), "dir") + "/.."
+    response_file_args += [
+      "--cwd=$manifest_cwd",
+      "--manifest=" + rebase_path(manifest),
+    ]
+  }
+
+  # All the manifests generated by this build are relative to root_build_dir.
+  response_file_args += [
     "--cwd=.",
     "--groups=all",
   ]
@@ -143,50 +167,44 @@ action("finalize_manifests") {
   # but is written implicitly at gen time rather than by a proper action.
   # We're relying on the depfile to notice its changes.
   #sources += [ system_manifest_file ]
-  args += [ "--manifest=" + rebase_path(system_manifest_file) ]
+  response_file_args += [ "--manifest=" + rebase_path(system_manifest_file) ]
 
-  foreach(package, package_list) {
+  foreach(package, _result.packages) {
     package_manifest = "$root_build_dir/package/$package/system_manifest"
 
-    # GN won't let us make these sources because they're in the build
-    # directory but written implicitly at gen time rather than by a proper
-    # action.  We're relying on the depfile to notice their changes.
-    #sources += [ package_manifest ]
+    sources += [ package_manifest ]
 
-    args += [ "--optional-manifest=" + rebase_path(package_manifest, root_build_dir) ]
+    response_file_args += [ "--manifest=" + rebase_path(package_manifest, root_build_dir) ]
   }
 
-  foreach(package, package_list) {
+  foreach(package, _result.packages) {
     package_manifest = "$root_build_dir/package/$package/archive_manifest"
     final_manifest = "$root_build_dir/package/$package/final_archive_manifest"
 
-    # GN won't let us make these sources because they're in the build
-    # directory but written implicitly at gen time rather than by a proper
-    # action.  We're relying on the depfile to notice their changes.
-    #sources += [ package_manifest ]
+    sources += [ package_manifest ]
 
     outputs += [ final_manifest ]
-    args += [
+    response_file_args += [
       "--standalone-output=" + rebase_path(final_manifest, root_build_dir),
       "--manifest=" + rebase_path(package_manifest, root_build_dir),
     ]
   }
 
-  foreach(package, package_list) {
+  foreach(package, _result.packages) {
     package_manifest = "$root_build_dir/package/$package/package_manifest"
     final_manifest = "$root_build_dir/package/$package/final_package_manifest"
 
-    # GN won't let us make these sources because they're in the build
-    # directory but written implicitly at gen time rather than by a proper
-    # action.  We're relying on the depfile to notice their changes.
-    #sources += [ package_manifest ]
+    sources += [ package_manifest ]
 
     outputs += [ final_manifest ]
-    args += [
+    response_file_args += [
       "--standalone-output=" + rebase_path(final_manifest, root_build_dir),
       "--manifest=" + rebase_path(package_manifest, root_build_dir),
     ]
   }
+
+  response_file_contents = response_file_args
+  args = [ "@{{response_file_name}}" ]
 }
 
 action("pkgbuilds") {
@@ -202,16 +220,17 @@ action("pkgbuilds") {
   amber_publish_out_dir = get_label_info(amber_publish_label, "root_out_dir")
   amber_publish_path = "$amber_publish_out_dir/amber-publish"
 
-  merkleroot_bin = "//out/build-zircon/tools/merkleroot"
+  merkleroot_bin = "$zircon_tools_dir/merkleroot"
 
   package_signing_key = system_package_key
 
   deps = [
-    amber_publish_label,
+    ":finalize_manifests",
+
     # TODO(raggi): cleanup these files, they shouldn't be in the root_build_dir
     "//garnet/go/src/amber:amber-srv-keys",
+    amber_publish_label,
     pm_label,
-    ":finalize_manifests"
   ]
   inputs = [
     pm_path,
@@ -228,10 +247,11 @@ action("pkgbuilds") {
   outputs = [
     packages_blobs_manifest,
     pkgsvr_index,
-    "$root_out_dir/amber-files/repository/targets.json"
+    "$root_out_dir/amber-files/repository/targets.json",
   ]
 
   script = "//build/gn_run_binary.sh"
+
   # TODO(raggi): technically this script inputs/outputs these things
   # inputs += [
   #   package_json_file,
@@ -254,13 +274,14 @@ action("pkgbuilds") {
     rebase_path(pm_path),
     "--merkleroot",
     rebase_path(merkleroot_bin),
-    "--blobstore-manifest",
+    "--blob-manifest",
     rebase_path(packages_blobs_manifest),
     "--pkgsvr-index",
     rebase_path(pkgsvr_index),
     "--amber-publish",
     rebase_path(amber_publish_path),
     "--amber-repo",
+
     # TODO(raggi): re-arrange and formalize these paths:
     rebase_path("$root_out_dir/amber-files"),
     "--amber-keys",
@@ -288,14 +309,14 @@ action("system.pkg") {
 
   pm_bin = "$pm_out_dir/pm"
   pkgsvr_bin = "$pkgsvr_out_dir/pkgsvr"
-  merkleroot_bin = "//out/build-zircon/tools/merkleroot"
+  merkleroot_bin = "$zircon_tools_dir/merkleroot"
 
   inputs = [
     merkleroot_bin,
     pkgsvr_bin,
     pm_bin,
     system_package_key,
-    pkgsvr_index
+    pkgsvr_index,
   ]
 
   script = "//build/gn_run_binary.sh"
@@ -318,8 +339,8 @@ action("system.pkg") {
     rebase_path(system_package_cmdline),
     "--pkgsvr-index",
     rebase_path(pkgsvr_index),
-    "--blobstore-manifest",
-    rebase_path(final_blobstore_manifest),
+    "--blob-manifest",
+    rebase_path(final_blob_manifest),
   ]
   sources = [
     "system_package.py",
@@ -329,38 +350,33 @@ action("system.pkg") {
     system_package_cmdline,
     system_package_dir,
     system_package_meta_far,
-    final_blobstore_manifest,
+    final_blob_manifest,
   ]
 }
 
-action("blobstore.blk") {
+zircon_tool_action("blob.blk") {
   visibility = [ ":*" ]
-  blobstore_bin = "//out/build-zircon/tools/blobstore"
-
-  script = "//build/gn_run_binary.sh"
+  tool = "blobfs"
   args = [
-    clang_prefix,
-    rebase_path(blobstore_bin),
-    rebase_path(blobstore_image_path),
+    rebase_path(blob_image_path),
     "create",
     "--manifest",
-    rebase_path(final_blobstore_manifest),
+    rebase_path(final_blob_manifest),
     "--manifest",
     rebase_path(packages_blobs_manifest),
   ]
   inputs = [
-    blobstore_bin,
     system_package_meta_far,
     packages_blobs_manifest,
-    final_blobstore_manifest,
+    final_blob_manifest,
   ]
   outputs = [
-    blobstore_image_path,
+    blob_image_path,
   ]
   deps = [
     ":finalize_manifests",
-    ":system.pkg",
     ":pkgbuilds",
+    ":system.pkg",
   ]
 }
 
@@ -395,14 +411,13 @@ bootdata_cmdline("systempkg_cmdline") {
 
 # Package up the /boot filesystem along with Zircon's kernel bootdata.
 # This `bootdata.bin` along with the Zircon kernel is enough to boot.
-foreach(platform, zircon_platforms) {
-  bootdata("bootdata-${platform}") {
+foreach(board, zircon_boards) {
+  bootdata("bootdata-${board}") {
     deps = [
       ":finalize_manifests",
     ]
-    kernel_build_dir = "//out/build-zircon/build-${platform}"
     inputs = [
-      "$kernel_build_dir/kernel-bootdata.bin",
+      "$zircon_build_dir/${board}-kernel-bootdata.bin",
       final_boot_manifest,
     ]
     boot = true
@@ -416,9 +431,9 @@ foreach(platform, zircon_platforms) {
     }
   }
 
-  bootdata("bootdata-blobstore-${platform}") {
+  bootdata("bootdata-blob-${board}") {
     deps = [
-      ":bootdata-${platform}",
+      ":bootdata-${board}",
       ":systempkg_cmdline",
     ]
 
@@ -431,19 +446,13 @@ foreach(platform, zircon_platforms) {
 
 # data.blk creates an empty but initialized minfs data partition. The partition
 # is included in fvm.data.sparse.blk.
-action("data.blk") {
-  minfs_path = "//out/build-zircon/tools/minfs"
-  inputs = [
-    minfs_path,
-  ]
+zircon_tool_action("data.blk") {
+  tool = "minfs"
 
   sized_path = rebase_path(data_image_path)
   sized_path = "${sized_path}@${data_image_size}"
 
-  script = "//build/gn_run_binary.sh"
   args = [
-    clang_prefix,
-    rebase_path(minfs_path),
     sized_path,
     "create",
   ]
@@ -452,31 +461,59 @@ action("data.blk") {
   ]
 }
 
-# fvm.blk creates a non-sparse FVM partition image containing the blobstore
-# partition produced by blobstore.blk. fvm.blk is primarily invoked and used by
+# fvm.blk creates a non-sparse FVM partition image containing the blob
+# partition produced by blob.blk. fvm.blk is primarily invoked and used by
 # the qemu run, via `fx run-fvm`.
-action("fvm.blk") {
+zircon_tool_action("fvm.blk") {
   visibility = [ ":*" ]
-  fvm_path = "//out/build-zircon/tools/fvm"
+  tool = "fvm"
   inputs = [
-    blobstore_image_path,
-    fvm_path,
+    blob_image_path,
   ]
   deps = [
-    ":blobstore.blk",
+    ":blob.blk",
   ]
 
-  script = "//build/gn_run_binary.sh"
   args = [
-    clang_prefix,
-    rebase_path(fvm_path),
     rebase_path(fvm_image_path),
     "create",
-    "--blobstore",
-    rebase_path(blobstore_image_path),
+    "--blob",
+    rebase_path(blob_image_path),
   ]
   outputs = [
     fvm_image_path,
+  ]
+}
+
+# Convert fvm.blk into a Qemu Copy on Write compressed image. This provides a
+# runtime-mountable qemu disk image that is significantly smaller than a raw FVM
+# partition image, but not as small as a compressed sparse FVM image.
+action("fvm.blk.qcow2") {
+  visibility = [ ":*" ]
+  script = "//buildtools/${host_platform}/qemu/bin/qemu-img"
+
+  inputs = [
+    fvm_image_path,
+  ]
+
+  fvm_qcow2_image_path = fvm_image_path + ".qcow2"
+  outputs = [
+    fvm_qcow2_image_path,
+  ]
+
+  deps = [
+    ":fvm.blk",
+  ]
+
+  args = [
+    "convert",
+    "-f",
+    "raw",
+    "-O",
+    "qcow2",
+    "-c",
+    rebase_path(fvm_image_path),
+    rebase_path(fvm_qcow2_image_path),
   ]
 }
 
@@ -493,30 +530,25 @@ bootdata_ramdisk("bootdata-fvm") {
   }
 }
 
-# fvm.sparse.blk creates a sparse FVM partition image containing the blobstore
-# partition produced by blobstore.blk.  fvm.sparse.blk is primarily invoked and
+# fvm.sparse.blk creates a sparse FVM partition image containing the blob
+# partition produced by blob.blk.  fvm.sparse.blk is primarily invoked and
 # used by the paver boot, via `fx boot-paver`.
-action("fvm.sparse.blk") {
+zircon_tool_action("fvm.sparse.blk") {
   visibility = [ ":*" ]
-  fvm_path = "//out/build-zircon/tools/fvm"
+  tool = "fvm"
   inputs = [
-    blobstore_image_path,
-    fvm_path,
+    blob_image_path,
   ]
   deps = [
-    ":blobstore.blk",
+    ":blob.blk",
   ]
-
-  script = "//build/gn_run_binary.sh"
   args = [
-    clang_prefix,
-    rebase_path(fvm_path),
     rebase_path(fvm_sparse_image_path),
     "sparse",
     "--compress",
     "lz4",
-    "--blobstore",
-    rebase_path(blobstore_image_path),
+    "--blob",
+    rebase_path(blob_image_path),
   ]
   outputs = [
     fvm_sparse_image_path,
@@ -525,21 +557,16 @@ action("fvm.sparse.blk") {
 
 # fmv.data.sparse.blk is an FVM image containing only data.blk. It is
 # used to pave new data partitions to a device.
-action("fvm.data.sparse.blk") {
+zircon_tool_action("fvm.data.sparse.blk") {
   visibility = [ ":*" ]
-  fvm_path = "//out/build-zircon/tools/fvm"
+  tool = "fvm"
   inputs = [
     data_image_path,
-    fvm_path,
   ]
   deps = [
     ":data.blk",
   ]
-
-  script = "//build/gn_run_binary.sh"
   args = [
-    clang_prefix,
-    rebase_path(fvm_path),
     rebase_path(fvm_data_sparse_image_path),
     "sparse",
     "--compress",
@@ -558,9 +585,6 @@ action("fvm.data.sparse.blk") {
 #
 #   deps (required)
 #     Must be bootdata labels defined earlier in the file.
-#
-#   platform (required)
-#     zircon_platforms element.
 #
 template("vboot") {
   output_name = "${target_name}.vboot"
@@ -591,8 +615,7 @@ template("vboot") {
     bootdata_bin = bootdata_bins[0]
     assert([ bootdata_bin ] == bootdata_bins)
 
-    kernel_build_dir = "//out/build-zircon/build-${invoker.platform}"
-    zircon_bin = "$kernel_build_dir/zircon.bin"
+    zircon_bin = "${zircon_build_dir}/zircon.bin"
     inputs += [ zircon_bin ]
 
     output = "$images_dir/$output_name"
@@ -647,7 +670,7 @@ template("esp") {
       make_efi_label,
     ]
 
-    mkfs_msdosfs_bin = "//out/build-zircon/tools/mkfs-msdosfs"
+    mkfs_msdosfs_bin = "$zircon_tools_dir/mkfs-msdosfs"
 
     make_efi_out_dir = get_label_info(make_efi_label, "root_out_dir")
     make_efi_bin = "$make_efi_out_dir/make-efi"
@@ -711,8 +734,7 @@ template("esp") {
     }
 
     if (target_cpu == "x64") {
-      kernel_build_dir = "//out/build-zircon/build-${invoker.platform}"
-      gigaboot_bin = "$kernel_build_dir/bootloader/bootx64.efi"
+      gigaboot_bin = "${zircon_build_dir}/bootloader/bootx64.efi"
       args += [
         "--efi-bootloader",
         rebase_path(gigaboot_bin),
@@ -750,7 +772,7 @@ zedboot_binary_patterns = [
   "driver/*",  # Drivers automagically cause devhost to be brought in.
 
   # These are needed for installer runs.
-  "bin/blobstore",
+  "bin/blobfs",
   "bin/install-disk-image",
   "bin/minfs",
   "bin/mount",
@@ -786,16 +808,19 @@ action("zedboot_manifest") {
     build_id_file,
   ]
 
-  zircon_manifest_cwd = rebase_path("//out/build-zircon")
-  sources = [
-    zircon_boot_manifest,
-  ]
+  sources = zircon_boot_manifests
+  args = []
+  foreach(manifest, zircon_boot_manifests) {
+    manifest_cwd = get_path_info(rebase_path(manifest), "dir") + "/.."
+    args += [
+      "--cwd=$manifest_cwd",
+      "--manifest=" + rebase_path(manifest),
+    ]
+  }
 
-  args = [
+  args += [
     "--depfile=" + rebase_path(depfile, root_build_dir),
     "--build-id-file=" + rebase_path(build_id_file, root_build_dir),
-    "--cwd=$zircon_manifest_cwd",
-    "--manifest=" + rebase_path(zircon_boot_manifest),
     "--output=" + rebase_path(zedboot_manifest, root_build_dir),
   ]
 
@@ -804,18 +829,17 @@ action("zedboot_manifest") {
   }
 }
 
-foreach(platform, zircon_platforms) {
-  # zedboot-data-${platform}.bin is a Zircon BOOTDATA file containing the
+foreach(board, zircon_boards) {
+  # zedboot-data-${board}.bin is a Zircon BOOTDATA file containing the
   # command line and BOOTFS pieces necessary to make Zircon be Zedboot.
-  bootdata("zedboot-data-${platform}") {
+  bootdata("zedboot-data-${board}") {
     boot = true
     deps = [
       ":zedboot_cmdline",
       ":zedboot_manifest",
     ]
-    kernel_build_dir = "//out/build-zircon/build-${platform}"
     inputs = [
-      "$kernel_build_dir/kernel-bootdata.bin",
+      "${zircon_build_dir}/${board}-kernel-bootdata.bin",
     ]
     foreach(dep, deps) {
       dep = get_target_outputs(dep)
@@ -828,9 +852,9 @@ foreach(platform, zircon_platforms) {
   # without using any real storage.  The system decompresses the fvm.blk
   # image into memory and then sees that RAM disk just as if it were a
   # real disk on the device.
-  bootdata("netboot-${platform}") {
+  bootdata("netboot-${board}") {
     deps = [
-      ":bootdata-blobstore-${platform}",
+      ":bootdata-blob-${board}",
       ":bootdata-fvm",
     ]
     inputs = []
@@ -840,122 +864,180 @@ foreach(platform, zircon_platforms) {
   }
 
   # ChromeOS vboot images.
-  vboot("zircon-${platform}") {
+  vboot("zircon-${board}") {
     deps = [
-      ":bootdata-blobstore-${platform}",
+      ":bootdata-blob-${board}",
     ]
   }
 
-  # NOTE(raggi): zircon.bin from //out/build-zircon/build-${platform} is not a
-  # bootdata image on ARM, as such, all targets that try to use it as such are
-  # disabled here.
-  if (target_cpu == "x64") {
-    # images/zedboot-${platform}.bin combines the kernel image itself with
+  # arm64 kernels are not valid bootdata, and cannot be used to produce unified
+  # kernel+bootdata images such as zedboot-{board}.bin
+  if (target_cpu != "arm64") {
+    # images/zedboot-${board}.bin combines the kernel image itself with
     # the BOOTDATA bits.  This single file can be booted by Gigaboot.
-    bootdata("zedboot-${platform}") {
+    bootdata("zedboot-${board}") {
       output_name = "images/$target_name"
       deps = [
-        ":zedboot-data-${platform}",
+        ":zedboot-data-${board}",
       ]
-      kernel_build_dir = "//out/build-zircon/build-${platform}"
       inputs = [
-        "$kernel_build_dir/zircon.bin",
+        "${zircon_build_dir}/zircon.bin",
       ]
       foreach(label, deps) {
         inputs += get_target_outputs(label)
       }
     }
+  }
 
-    vboot("zedboot-${platform}") {
-      deps = [
-        ":zedboot-data-${platform}",
-      ]
-    }
+  vboot("zedboot-${board}") {
+    deps = [
+      ":zedboot-data-${board}",
+    ]
+  }
 
-    # EFI ESP images.
-    esp("local-${platform}") {
-      if (always_zedboot) {
-        cmdline = "efi_zedboot_cmdline"
-      } else {
-        cmdline = "efi_local_cmdline"
-      }
-      zircon_bin = "//out/build-zircon/build-${platform}/zircon.bin"
-      zedboot = ":zedboot-${platform}"
-      deps = [ ":bootdata-blobstore-${platform}" ]
-    }
-
-    esp("zedboot-${platform}") {
+  # EFI ESP images.
+  esp("local-${board}") {
+    if (always_zedboot) {
       cmdline = "efi_zedboot_cmdline"
-      zedboot = ":zedboot-${platform}"
+    } else {
+      cmdline = "efi_local_cmdline"
     }
+    zircon_bin = "${zircon_build_dir}/zircon.bin"
+
+    # Unified zedboot is not available for arm64
+    if (target_cpu != "arm64") {
+      zedboot = ":zedboot-${board}"
+    }
+
+    deps = [
+      ":bootdata-blob-${board}",
+    ]
+  }
+
+  if (target_cpu != "arm64") {
+    esp("zedboot-${board}") {
+      cmdline = "efi_zedboot_cmdline"
+      zedboot = ":zedboot-${board}"
+    }
+  }
+
+  # install.blk creates a minfs partition image that includes all of the images
+  # required to install a Fuchsia build.
+  action("install-${board}.blk") {
+    minfs_path = "$zircon_tools_dir/minfs"
+    installer_label = "//garnet/bin/installer:install-fuchsia"
+    installer_out_dir = get_label_info(installer_label, "root_out_dir")
+    installer_path = installer_out_dir + "/install-fuchsia"
+
+    inputs = [
+      minfs_path,
+      installer_path,
+    ]
+
+    # The installer needs all images except for `fvm.blk` (it uses fvm.sparse.blk):
+    input_images = [
+      "fvm.sparse.blk",
+      "fvm.data.sparse.blk",
+      "local-${board}.esp.blk",
+      "zedboot-${board}.vboot",
+      "zircon-${board}.vboot",
+    ]
+
+    if (target_cpu != "arm64") {
+      input_images += [ "zedboot-${board}.esp.blk" ]
+    }
+
+    # Add all of the input images as dependencies
+    deps = [
+      installer_label,
+    ]
+    foreach(image, input_images) {
+      deps += [ ":${image}" ]
+    }
+
+    install_manifest = "$root_build_dir/install_manifest"
+
+    # Produce a manifest of images to be added to the filesystem
+    manifest_lines = []
+    rebased_installer_path = rebase_path(installer_path, root_build_dir)
+    manifest_lines += [ "install-fuchsia=${rebased_installer_path}" ]
+    foreach(image, input_images) {
+      image_src_path = rebase_path("${images_dir}/${image}", root_build_dir)
+      manifest_lines += [ "${image}=${image_src_path}" ]
+    }
+    write_file(install_manifest, manifest_lines)
+
+    output_image_path = "${images_dir}/${target_name}"
+    outputs = [
+      output_image_path,
+    ]
+    sources = [
+      "mkminfs.py",
+    ]
+
+    script = "//build/gn_run_binary.sh"
+    args = [
+      clang_prefix,
+      rebase_path(sources[0]),
+      "--minfs",
+      rebase_path(minfs_path),
+      "--output",
+      rebase_path(output_image_path),
+      "--manifest",
+      rebase_path(install_manifest),
+    ]
   }
 }
 
 group("zedboot") {
   deps = []
-  if (target_cpu == "x64") {
-    foreach(platform, zircon_platforms) {
-      deps += [ ":zedboot-${platform}" ]
+  foreach(board, zircon_boards) {
+    # Unified zedboot is not available for arm64, but we can still build the
+    # zedboot-data which is useful if someone wants to construct a zedboot
+    # image/disk.
+    if (target_cpu == "arm64") {
+      deps += [ ":zedboot-data-${board}" ]
+    } else {
+      deps += [ ":zedboot-${board}" ]
     }
   }
 }
 
 group("netboot") {
   deps = []
-  foreach(platform, zircon_platforms) {
-    deps += [ ":netboot-${platform}" ]
+  foreach(board, zircon_boards) {
+    deps += [ ":netboot-${board}" ]
   }
 }
 
 group("images") {
   deps = [
-    ":blobstore.blk",
+    ":blob.blk",
     ":fvm.blk",
+    ":fvm.data.sparse.blk",
     ":fvm.sparse.blk",
-    ":fvm.data.sparse.blk"
+    "//zircon/public/config:boards",
   ]
 
-  foreach(platform, zircon_platforms) {
-    deps += [ ":zircon-${platform}.vboot" ]
-  }
-
-  if (target_cpu == "x64") {
-    foreach(platform, zircon_platforms) {
-      deps += [
-        ":local-${platform}.esp.blk",
-        ":zedboot-${platform}.esp.blk",
-        ":zedboot-${platform}.vboot",
-      ]
+  foreach(board, zircon_boards) {
+    deps += [
+      ":local-${board}.esp.blk",
+      ":zedboot-${board}.vboot",
+      ":zircon-${board}.vboot",
+    ]
+    if (target_cpu != "arm64") {
+      deps += [ ":zedboot-${board}.esp.blk" ]
     }
   }
 }
 
-zircon_files =
-    exec_script("//build/zircon/list_source_files.py", [], "list lines")
-
-supporting_templates = [
-  "//build/zircon/header.mako",
-  "//build/zircon/host_tool.mako",
-  "//build/zircon/shared_library.mako",
-  "//build/zircon/source_library.mako",
-  "//build/zircon/static_library.mako",
-  "//build/zircon/sysroot.mako",
-]
-
-exec_script("//build/zircon/create_gn_rules.py",
-            [
-              "--out",
-              rebase_path("//zircon/public"),
-              "--staging",
-              rebase_path("$root_out_dir/zircon-gn"),
-              "--zircon-user-build",
-              rebase_path("//out/build-zircon/build-${zircon_user_project}-\${zircon_cpu}"),
-              "--zircon-tool-build",
-              rebase_path("//out/build-zircon"),
-            ],
-            "",
-            zircon_files + supporting_templates)
+group("install") {
+  deps = []
+  foreach(board, zircon_boards) {
+    deps += [ ":install-${board}.blk" ]
+  }
+}
 
 group("default") {
-  deps = [ ":images" ] + packages_labels
+  deps = [ ":images", ":netboot" ] + packages_labels
 }

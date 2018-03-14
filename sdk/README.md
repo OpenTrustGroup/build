@@ -35,10 +35,16 @@ way to provide hierarchy to SDK atoms.
 
 There are a few GN templates developers should use to enable the inclusion of
 their code in an SDK:
+- [`prebuilt_shared_library`](/cpp/prebuilt_shared_library.gni)
 - [`sdk_shared_library`](/cpp/sdk_shared_library.gni)
 - [`sdk_source_set`](/cpp/sdk_source_set.gni)
 - [`sdk_static_library`](/cpp/sdk_static_library.gni)
 - [`sdk_group`](sdk_group.gni)
+- [`sdk_executable`](/cpp/sdk_executable.gni)
+
+Some language-specific targets are also SDK-ready:
+- [`go_binary`](/go/go_binary.gni)
+
 A target `//foo/bar` declared with one of these templates will yield an
 additional target `//foo/bar:bar_sdk` which is an atom ready to be included in
 an SDK.
@@ -80,3 +86,8 @@ which would otherwise rely on an official SDK.
 For an SDK declared at `//my/api` and marked as "exported", an additional GN
 target exists: `//my/api:api_export`. This target will generate a usable SDK
 under `out/<build-type>/sdks/<sdk-target-name>`.
+
+An exported SDK can also be declared as "old school", in which case it will
+produce a sysroot with all the libraries in that SDK.
+Note that this is a temporary feature which will disappear once the third-party
+runtimes that need it have all been updated.

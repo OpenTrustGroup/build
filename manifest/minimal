@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest>
+  <projects>
+    <project name="build"
+             path="build"
+             remote="ssh://review.gerrithub.io:29418/OpenTrustGroup/build"
+             remotebranch="gzos"
+             gerrithost="https://review.gerrithub.io"/>
+  </projects>
+  <hooks>
+    <hook name="symlink-.gn"
+          project="build"
+          action="dot_gn_symlink.sh"/>
+  </hooks>
+</manifest>

@@ -51,6 +51,7 @@ sdk_atom("${data.name}_sdk") {
 
   tags = [
     "type:compiled_static",
+    "arch:target",
   ]
 
   files = [
@@ -61,8 +62,18 @@ sdk_atom("${data.name}_sdk") {
     },
     % endfor
     {
-      source = "${data.prebuilt}"
+      source = _lib
       dest = "lib/${data.lib_name}"
     },
+  ]
+
+  package_deps = [
+    % for dep in sorted(data.deps):
+    "../${dep}:${dep}_sdk",
+    % endfor
+  ]
+
+  non_sdk_deps = [
+    ":${data.name}",
   ]
 }
