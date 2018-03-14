@@ -2,10 +2,12 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//build/dart/dart_package.gni")
+import("//build/dart/dart_library.gni")
 
-dart_package("analyzer_cli") {
+dart_library("analyzer_cli") {
   package_name = "analyzer_cli"
+
+  sources = []
 
   disable_analysis = true
 

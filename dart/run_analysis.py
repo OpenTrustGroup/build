@@ -18,11 +18,8 @@ import yaml
 
 def main():
     parser = argparse.ArgumentParser('Runs analysis on a given package')
-    parser.add_argument('--source-dir', help='Path to package source',
+    parser.add_argument('--source-file', help='Path to the list of sources',
                         required=True)
-    parser.add_argument('--extra-sources', help='Path to extra source files',
-                        nargs="*",
-                        default=[])
     parser.add_argument('--dot-packages', help='Path to the .packages file',
                         required=True)
     parser.add_argument('--dartanalyzer',
@@ -40,17 +37,13 @@ def main():
                         required=True)
     args = parser.parse_args()
 
+    with open(args.source_file, 'r') as source_file:
+        sources = source_file.read().strip().split('\n')
+
     with open(args.depfile, 'w') as depfile:
         depfile.write('%s: ' % args.depname)
         def add_dep(path):
             depfile.write('%s ' % path)
-        for dirpath, dirnames, filenames in os.walk(args.source_dir):
-            for filename in filenames:
-                _, extension = os.path.splitext(filename)
-                if extension == '.dart':
-                    add_dep(os.path.join(dirpath, filename))
-        for source in args.extra_sources:
-            add_dep(source)
         options = args.options
         while True:
             if not os.path.isabs(options):
@@ -77,8 +70,7 @@ def main():
         '--fatal-warnings',
         '--fatal-hints',
         '--fatal-lints',
-        args.source_dir,
-    ] + args.extra_sources
+    ] + sources
 
     call = subprocess.Popen(call_args, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE)

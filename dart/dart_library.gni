@@ -3,6 +3,10 @@
 # found in the LICENSE file.
 
 import("//build/dart/toolchain.gni")
+import("//third_party/flutter/lib/ui/dart_ui.gni")
+import("//topaz/public/dart-pkg/fuchsia/sdk_ext.gni")
+import("//topaz/public/dart-pkg/zircon/sdk_ext.gni")
+import("//topaz/public/lib/ui/flutter/sdk_ext/sdk_ext.gni")
 
 declare_args() {
   # Whether to use the analysis server instead of the CLI.
@@ -12,6 +16,15 @@ declare_args() {
 # Defines a Dart library
 #
 # Parameters
+#
+#   sources
+#     The list of public sources in this library, i.e. Dart files in lib/ but
+#     not in lib/src/. These sources must be within source_dir.
+#
+#   package_root (optional)
+#     Path to the directory hosting the library.
+#     This is useful for generated content, and can be ignored otherwise.
+#     Defaults to ".".
 #
 #   package_name (optional)
 #     Name of the Dart package. This is used as an identifier in code that
@@ -27,7 +40,9 @@ declare_args() {
 #           must be set.
 #
 #   source_dir (optional)
-#     Directory containing the package sources. Defaults to "lib".
+#     Path to the directory containing the package sources, relative to
+#     package_root.
+#     Defaults to "lib".
 #
 #   deps (optional)
 #     List of labels for Dart libraries this library depends on.
@@ -41,9 +56,6 @@ declare_args() {
 #   disable_analysis (optional)
 #     Prevents analysis from being run on this target.
 #
-#   extra_analyzer_sources (optional)
-#     Additional source paths to pass to the analyzer.
-#
 #   generated_code (optional)
 #     Boolean indicating that this library contains generated code. This option
 #     relaxes some constraints around package structure.
@@ -54,6 +66,11 @@ declare_args() {
 #
 #   dart_library("baz") {
 #     package_name = "foo.bar.baz"
+#
+#     sources = [
+#       "blah.dart",
+#     ]
+#
 #     deps = [
 #       "//foo/bar/owl"
 #     ]
@@ -81,9 +98,14 @@ template("dart_library") {
 
   dot_packages_file = "$target_gen_dir/$target_name.packages"
 
-  source_dir = "lib"
+  package_root = "."
+  if (defined(invoker.package_root)) {
+    package_root = invoker.package_root
+  }
+
+  source_dir = "$package_root/lib"
   if (defined(invoker.source_dir)) {
-    source_dir = invoker.source_dir
+    source_dir = "$package_root/${invoker.source_dir}"
   }
 
   # Dependencies of the umbrella group for the targets in this file.
@@ -99,7 +121,7 @@ template("dart_library") {
 
     deps = dart_deps
     if (defined(invoker.non_dart_deps)) {
-      deps += invoker.non_dart_deps
+      public_deps = invoker.non_dart_deps
     }
 
     inputs = [
@@ -109,7 +131,7 @@ template("dart_library") {
     if (!defined(invoker.generated_code) || !invoker.generated_code) {
       # Require a manifest file, allowing the analysis service to identify the
       # package.
-      inputs += [ "pubspec.yaml" ]
+      inputs += [ "$package_root/pubspec.yaml" ]
     }
 
     outputs = [
@@ -145,10 +167,58 @@ template("dart_library") {
     args += [ "--deps" ] + dart_deps
   }
 
+  source_target_name = "${target_name}_identify_sources"
+  group_deps += [
+    ":$source_target_name",
+  ]
+  source_file = "$target_gen_dir/$target_name.sources"
+
+  assert(defined(invoker.sources), "Public sources must be defined")
+  gen_snapshot_label = "//third_party/dart/runtime/bin:gen_snapshot($host_toolchain)"
+  gen_snapshot_dir = get_label_info(gen_snapshot_label, "root_out_dir")
+  gen_snapshot = "$gen_snapshot_dir/gen_snapshot"
+
+  action(source_target_name) {
+    script = "//build/dart/identify_sources.py"
+
+    outputs = [
+      source_file,
+    ]
+
+    depfile = "$target_gen_dir/$target_name.d"
+
+    args = [
+      "--gen-snapshot",
+      rebase_path(gen_snapshot),
+      "--sources",
+    ] + rebase_path(invoker.sources, "", source_dir) + [
+      "--packages",
+      rebase_path(dot_packages_file),
+      "--source-dir",
+      rebase_path(source_dir),
+      "--output",
+      rebase_path(source_file),
+      "--depfile",
+      rebase_path(depfile),
+      "--depname",
+      rebase_path(source_file, root_build_dir),
+      "--url-mapping",
+      "dart:zircon," + rebase_path(zircon_sdk_ext_lib),
+      "dart:fuchsia," + rebase_path(fuchsia_sdk_ext_lib),
+      "dart:mozart.internal," + rebase_path(mozart_dart_sdk_ext_lib),
+      "dart:ui," + rebase_path(dart_ui_path),
+    ]
+
+    deps = [
+      ":$dot_packages_target_name",
+      gen_snapshot_label,
+    ]
+  }
+
   with_analysis =
       !defined(invoker.disable_analysis) || !invoker.disable_analysis
   if (with_analysis) {
-    options_file = "analysis_options.yaml"
+    options_file = "$package_root/analysis_options.yaml"
     invocation_file = "$target_gen_dir/$target_name.analyzer.sh"
     invocation_target_name = "${target_name}_analysis_runner"
     group_deps += [
@@ -160,20 +230,12 @@ template("dart_library") {
     dart_bin = "$dart_sdk_dir/bin"
     dart_analyzer_binary = "$dart_bin/dartanalyzer"
 
-    extra_sources = []
-    if (defined(invoker.extra_analyzer_sources)) {
-      foreach(source, invoker.extra_analyzer_sources) {
-        extra_sources += [
-          rebase_path(source),
-        ]
-      }
-    }
-
     action(invocation_target_name) {
       script = "//build/dart/gen_analyzer_invocation.py"
 
       deps = [
         ":$dot_packages_target_name",
+        ":$source_target_name",
         dart_sdk_label,
       ]
 
@@ -189,8 +251,8 @@ template("dart_library") {
       args = [
         "--out",
         rebase_path(invocation_file),
-        "--source-dir",
-        rebase_path(source_dir),
+        "--source-file",
+        rebase_path(source_file),
         "--dot-packages",
         rebase_path(dot_packages_file),
         "--dartanalyzer",
@@ -212,8 +274,6 @@ template("dart_library") {
           target_label,
         ]
       }
-
-      args += extra_sources
     }
 
     analysis_target_name = "${target_name}_analysis"
@@ -227,7 +287,7 @@ template("dart_library") {
         runner_out_dir = get_label_info(runner_label, "root_out_dir")
         script = "$runner_out_dir/dart-tools/analyzer"
 
-        server_snaphost = "$dart_bin/snapshots/analysis_server.dart.snapshot"
+        server_snapshot = "$dart_bin/snapshots/analysis_server.dart.snapshot"
 
         depfile = "$target_gen_dir/$target_name.analysis.d"
 
@@ -246,13 +306,18 @@ template("dart_library") {
           output_file,
         ]
 
+        # TODO(pylaligand): have the analysis server analyze individual files.
+        # It currently only understands directories.
+
         args = [
           "--package-root",
           rebase_path("."),
           "--source-dir",
           rebase_path(source_dir, "."),
           "--server-snapshot",
-          rebase_path(server_snaphost),
+          rebase_path(server_snapshot),
+          "--sdk-dir",
+          rebase_path(dart_sdk_dir),
           "--stamp",
           rebase_path(output_file),
           "--depname",
@@ -263,7 +328,7 @@ template("dart_library") {
           rebase_path("$root_out_dir/analysis-cache"),
           "--log-file",
           rebase_path(log_file),
-        ] + extra_sources
+        ]
 
         deps = [
           ":$dot_packages_target_name",
@@ -288,8 +353,8 @@ template("dart_library") {
         ]
 
         args = [
-          "--source-dir",
-          rebase_path(source_dir),
+          "--source-file",
+          rebase_path(source_file),
           "--dot-packages",
           rebase_path(dot_packages_file),
           "--dartanalyzer",
@@ -304,19 +369,15 @@ template("dart_library") {
           rebase_path(output_file, root_build_dir),
           "--depfile",
           rebase_path(depfile),
-          "--extra-sources",
-        ] + extra_sources
+        ]
 
         deps = [
           ":$dot_packages_target_name",
+          ":$source_target_name",
           dart_sdk_label,
         ]
       }
     }
-  } else {  # !with_analysis
-    not_needed(invoker, [
-      "extra_analyzer_sources",
-    ])
   }
 
   group(target_name) {

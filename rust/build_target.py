@@ -24,25 +24,6 @@ def create_base_directory(file):
         # Already existed.
         pass
 
-# Returns the list of native libs inherited from the given dependencies.
-def extract_native_libs(dependency_infos):
-    all_libs = itertools.chain.from_iterable(map(lambda i: i["native_libs"],
-                                                 dependency_infos))
-    return list(set(all_libs))
-
-
-# Fixes the target path in the given depfile.
-def fix_depfile(depfile_path, base_path):
-    with open(depfile_path, "r+") as depfile:
-        content = depfile.read()
-        content_split = content.split(': ', 1)
-        target_path = content_split[0]
-        adjusted_target_path = os.path.relpath(target_path, start=base_path)
-        new_content = "%s: %s" % (adjusted_target_path, content_split[1])
-        depfile.seek(0)
-        depfile.write(new_content)
-        depfile.truncate()
-
 
 # Runs the given command and returns its return code and output.
 def run_command(args, env, cwd):
@@ -107,9 +88,6 @@ def main():
     parser.add_argument("--vendor-directory",
                         help="Path to the vendored crates",
                         required=True)
-    parser.add_argument("--deps",
-                        help="List of dependencies",
-                        nargs="*")
     parser.add_argument("--shared-libs-root",
                         help="Path to the location of shared libraries",
                         required=True)
@@ -121,9 +99,13 @@ def main():
     env = os.environ.copy()
     clang_c_compiler = args.clang_prefix + '/clang'
     if args.sysroot is not None:
+        env["CARGO_TARGET_LINKER"] = clang_c_compiler
+        env["CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER"] = clang_c_compiler
+        env["CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER"] = clang_c_compiler
         env["CARGO_TARGET_%s_LINKER" % args.target_triple.replace("-", "_").upper()] = clang_c_compiler
-        env["CARGO_TARGET_%s_RUSTFLAGS" % args.target_triple.replace("-", "_").upper()] = "-Clink-arg=--target=" + args.target_triple + " -Clink-arg=--sysroot=" + args.sysroot
+        env["CARGO_TARGET_%s_RUSTFLAGS" % args.target_triple.replace("-", "_").upper()] = "-Clink-arg=--target=" + args.target_triple + " -Clink-arg=--sysroot=" + args.sysroot + " -Lnative=" + args.shared_libs_root
     env["CARGO_TARGET_DIR"] = args.out_dir
+    env["CARGO_BUILD_DEP_INFO_BASEDIR"] = args.root_out_dir
     env["RUSTC"] = args.rustc
     env["RUST_BACKTRACE"] = "1"
     env["FUCHSIA_GEN_ROOT"] = args.root_gen_dir
@@ -141,18 +123,10 @@ def main():
     with open(original_manifest, "r") as manifest:
         config = pytoml.load(manifest)
         package_name = config["package"]["name"]
-        default_name = package_name.replace("-", "_")
-
-    if args.type == "lib":
-        # Since the generated .rlib artifact won't actually be used (for now),
-        # just do syntax checking and avoid generating it.
-        build_command = "check"
-    else:
-        build_command = "build"
 
     call_args = [
         args.cargo,
-        build_command,
+        "build",
         "--target=%s" % args.target_triple,
         "--verbose",
     ]
@@ -179,12 +153,11 @@ def main():
     build_type = "release" if args.release else "debug"
     depfile_path = os.path.join(args.out_dir, args.target_triple, build_type,
                                 "%s.d" % output_name)
-    fix_depfile(depfile_path, args.root_out_dir)
 
     if args.with_tests:
         test_args = list(call_args)
-        test_args[1] = "test"
-        test_args.append("--no-run")
+        test_args[1] = "build"
+        test_args.append("--tests")
         test_args.append("--message-format=json")
         retcode, stdout, _ = run_command(test_args, env, args.crate_root)
         if retcode != 0:
@@ -195,19 +168,29 @@ def main():
             print(stdout + stderr)
             return retcode
         generated_test_path = None
+        test_name = None
         for line in stdout.splitlines():
             data = json.loads(line)
             if "profile" in data and data["profile"]["test"]:
               generated_test_path = data["filenames"][0]
-              break
-        if not generated_test_path:
-            print("Unable to locate resulting test file")
-            return 1
-        dest_test_path = os.path.join(args.out_dir,
-                                      "%s-%s-test" % (args.name, args.type))
-        if os.path.islink(dest_test_path):
-            os.unlink(dest_test_path)
-        os.symlink(generated_test_path, dest_test_path)
+              # only integration tests are marked as 'test', unit tests are 'lib'
+              if data["target"]["kind"][0] == "test":
+                test_type = 'integration'
+                if "target" in data and data["target"]["name"]:
+                    test_name = data["target"]["name"]
+              else:
+                test_type = 'unit'
+            if generated_test_path and test_type:
+                if test_name:
+                    dest_test_path = os.path.join(args.out_dir,
+                            "%s-%s-%s-%s-test" % (args.name, test_name, args.type, test_type))
+                else:
+                    # maintain support for unit tests
+                    dest_test_path = os.path.join(args.out_dir,
+                            "%s-%s-%s-test" % (args.name, args.type, test_type))
+                if os.path.islink(dest_test_path):
+                    os.unlink(dest_test_path)
+                os.symlink(generated_test_path, dest_test_path)
 
     return 0
 

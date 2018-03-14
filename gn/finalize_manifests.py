@@ -38,6 +38,8 @@ import fnmatch
 import itertools
 import manifest
 import os
+import shlex
+import sys
 import variant
 
 
@@ -289,7 +291,12 @@ def strip_binary_manifest(manifest, stripped_dir, examined):
     # update the manifest entry to point to the stripped file.
     def make_debug_file(entry, info):
         debug = info
-        stripped = os.path.join(stripped_dir, entry.target)
+        # TODO(TO-842): After TO-842, stripped_dir will a place dedicated
+        # to this one output manifest, and using entry.target will be right
+        # again.  For now, multiple manifests use the same entry.target value
+        # for different files, and they clobber each other in stripped_dir.
+        #stripped = os.path.join(stripped_dir, entry.target)
+        stripped = os.path.join(stripped_dir, os.path.basename(entry.source))
         dir = os.path.dirname(stripped)
         if not os.path.isdir(dir):
             os.makedirs(dir)
@@ -467,12 +474,6 @@ class input_manifest_action(argparse.Action):
             inputs.append(input_manifest(file, cwd, groups, output_group))
 
 
-class optional_input_manifest_action(input_manifest_action):
-    def __init__(self, *args, **kwargs):
-        super(optional_input_manifest_action, self).__init__(*args, **kwargs)
-        self.optional = True
-
-
 class input_binary_action(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         binaries = getattr(namespace, self.dest, None)
@@ -510,12 +511,14 @@ shared libraries and the like.
                         help='"all" or comma-separated groups to include')
     parser.add_argument('--manifest', action=input_manifest_action,
                         help='Input manifest file (must exist)')
-    parser.add_argument('--optional-manifest', dest='manifest',
-                        action=optional_input_manifest_action,
-                        help='Input manifest file (if it exists)')
     parser.add_argument('--binary', action=input_binary_action, default=[],
                         help='Take matching binaries from auxiliary manifests')
-    return parser.parse_args()
+    if len(sys.argv) == 2 and sys.argv[1][0] == '@':
+        with open(sys.argv[1][1:]) as rsp_file:
+            argv = shlex.split(rsp_file)
+    else:
+        argv = sys.argv[1:]
+    return parser.parse_args(argv)
 
 
 def main():

@@ -98,6 +98,14 @@ if (current_os == "fuchsia") {
   is_fuchsia_host = true
 }
 
+# Some library targets may be built as different type depending on the target
+# platform. This variable specifies the default library type for each target.
+if (is_fuchsia) {
+  default_library_type = "shared_library"
+} else {
+  default_library_type = "static_library"
+}
+
 # Each variant toolchain's name is formed by taking the base toolchain
 # name and successively appending "-$name" for each config listed in
 # the variant, where name is `get_label_name(config, "name")`.
@@ -170,7 +178,10 @@ if (is_fuchsia) {
   }
 }
 
-default_common_binary_configs += [ "//build/config/lto:default" ]
+default_common_binary_configs += [
+  "//build/config/lto:default",
+  "//build/config/scudo:default",
+]
 
 # Add configs set by the toolchain definition.
 default_common_binary_configs += toolchain_configs + toolchain_variant

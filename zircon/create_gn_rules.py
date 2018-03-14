@@ -119,8 +119,9 @@ class SourceLibrary(object):
 
     def __init__(self, name):
         self.name = name
+        self.includes = {}
         self.include_dirs = set()
-        self.sources = []
+        self.sources = {}
         self.deps = []
         self.libs = set()
 
@@ -133,13 +134,13 @@ def generate_source_library(package, context):
     # Includes.
     for name, path in package.get('includes', {}).iteritems():
         (file, folder) = extract_file(name, path, context)
-        data.sources.append('//%s' % file)
+        data.includes[name] = '//%s' % file
         data.include_dirs.add('//%s' % folder)
 
     # Source files.
     for name, path in package.get('src', {}).iteritems():
         (file, _) = extract_file(name, path, context)
-        data.sources.append('//%s' % file)
+        data.sources[name] = '//%s' % file
 
     # Dependencies.
     data.deps += filter_deps(package.get('deps', []))
@@ -205,6 +206,7 @@ def generate_compiled_library(package, context):
 
     # Dependencies.
     data.deps += filter_deps(package.get('deps', []))
+    data.deps += filter_deps(package.get('static-deps', []))
 
     # Generate the build file.
     template = 'shared_library.mako' if is_shared else 'static_library.mako'
@@ -267,6 +269,14 @@ def generate_host_tool(package, context):
     generate_build_file(build_path, 'host_tool.mako', data, context)
 
 
+def generate_board_list(package, context):
+    """Generates a configuration file with the list of target boards."""
+    build_path = os.path.join(context.out_dir, 'config', 'boards.gni')
+    generate_build_file(build_path, 'boards.mako', package, context)
+    build_path = os.path.join(context.out_dir, 'config', 'BUILD.gn')
+    generate_build_file(build_path, 'main.mako', package, context)
+
+
 class GenerationContext(object):
     """Describes the context in which GN rules should be generated."""
 
@@ -299,13 +309,14 @@ def main():
     args = parser.parse_args()
 
     out_dir = os.path.abspath(args.out)
+    shutil.rmtree(os.path.join(out_dir, 'config'), True)
     shutil.rmtree(os.path.join(out_dir, 'lib'), True)
     shutil.rmtree(os.path.join(out_dir, 'sysroot'), True)
     shutil.rmtree(os.path.join(out_dir, 'tool'), True)
     debug = args.debug
 
     # Generate package descriptions through Zircon's build.
-    zircon_dir = args.staging
+    zircon_dir = os.path.abspath(args.staging)
     shutil.rmtree(zircon_dir, True)
     if debug:
         print('Building Zircon in: %s' % zircon_dir)
@@ -370,6 +381,11 @@ def main():
             continue
         if debug:
             print('Processed %s (%s)' % (name, type))
+
+    board_path = os.path.join(zircon_dir, 'export', 'all-boards.list')
+    with open(board_path, 'r') as board_file:
+        package = parse_package(board_file.readlines())
+        generate_board_list(package, context)
 
 
 if __name__ == "__main__":

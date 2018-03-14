@@ -4,10 +4,7 @@
 
 import("//build/sdk/sdk_atom.gni")
 
-# A set of C++ code exportable in an SDK.
-#
-# An equivalent to the built-in source_set which adds an SDK atom declaration to
-# allow the set to be included in an SDK.
+# A set of C++ code exportable in an SDK as sources.
 #
 # Parameters
 #
@@ -22,10 +19,14 @@ import("//build/sdk/sdk_atom.gni")
 #     If set, path to the base directory of the sources.
 #     This is useful if the sources are generated and therefore not hosted
 #     directly under the directory where the GN rules are declared.
+#
+#   include_base (optional)
+#     Path to the root directory for includes.
+#     Defaults to "include".
 
 template("sdk_library") {
   if (!defined(invoker.type)) {
-    assert(false, "Must specify a library type")
+    assert(false, "Must specify a library type.")
   }
   library_type = invoker.type
 
@@ -34,6 +35,7 @@ template("sdk_library") {
 
   target(library_type, main_target_name) {
     forward_variables_from(invoker, "*", [
+      "include_base",
       "sdk_name",
       "source_dir",
       "type",
@@ -87,15 +89,28 @@ template("sdk_library") {
     }
 
     tags = [
-      "type:$library_type",
+      "type:sources",
     ]
 
     files = []
     if (defined(invoker.sources)) {
       foreach(source_file, invoker.sources) {
-        files += [{
-          source = source_file
-        }]
+        extension = get_path_info(source_file, "extension")
+        if (extension == "h") {
+          include_base = "include"
+          if (defined(invoker.include_base)) {
+            include_base = invoker.include_base
+          }
+          destination = rebase_path(source_file, include_base)
+          files += [{
+            source = source_file
+            dest = "include/$destination"
+          }]
+        } else {
+          files += [{
+            source = source_file
+          }]
+        }
       }
     }
 

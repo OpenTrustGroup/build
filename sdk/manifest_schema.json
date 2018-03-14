@@ -33,8 +33,13 @@
       "type": "object",
       "properties": {
         "domain": {
-          "description": "The group of atoms this atom belongs to (e.g. 'c', 'dart', etc...)",
-          "type": "string"
+          "description": "The group of atoms this atom belongs to",
+          "type": "string",
+          "enum": [
+            "c-pp",
+            "exe",
+            "fidl"
+          ]
         },
         "name": {
           "description": "The name of this atom, unique within its domain",
@@ -56,15 +61,14 @@
           "$ref": "#/definitions/atomId"
         },
         "gn-label": {
-          "description": "Label of the GN target which generated the atom.",
+          "description": "Label of the GN target which generated the atom",
           "type": "string"
         },
         "files": {
           "description": "The files making up the atom",
-          "type": "object",
-          "additionalProperties": {
-            "description": "The property name is the path of the file relative to the destination root of the atom; the value is the path to the source file",
-            "type": "string"
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/atomFile"
           }
         },
         "deps": {
@@ -74,17 +78,59 @@
             "$ref": "#/definitions/atomId"
           }
         },
+        "package-deps": {
+          "description": "The ids of the atoms this atom needs at runtime",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/atomId"
+          }
+        },
         "tags": {
           "description": "A collection of potentially domain-specific metadata",
-          "type": "object",
-          "additionalProperties": true
+          "oneOf": [
+            {
+              "$ref": "#/definitions/cppTags"
+            },
+            {
+              "$ref": "#/definitions/exeTags"
+            },
+            {
+              "$ref": "#/definitions/fidlTags"
+            }
+          ]
         }
       },
       "required": [
         "deps",
         "files",
         "id",
-        "tags"
+        "tags",
+        "gn-label",
+        "package-deps"
+      ],
+      "additionalProperties": false
+    },
+    "atomFile": {
+      "description": "Description of a file pertaining to an atom",
+      "type": "object",
+      "properties": {
+        "source": {
+          "description": "Path to the source file",
+          "type": "string"
+        },
+        "destination": {
+          "description": "Destination path of the file relative to the root of the atom",
+          "type": "string"
+        },
+        "packaged": {
+          "description": "Whether this file should be included in a Fuchsia package containing this atom",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "source",
+        "destination",
+        "packaged"
       ],
       "additionalProperties": false
     },
@@ -92,15 +138,99 @@
       "description": "Additional information about an SDK",
       "type": "object",
       "properties": {
-        "arch": {
-          "description": "The target architecture for binaries referenced in this manifest, expressed as a compiler triple",
+        "target-arch": {
+          "description": "The architecture for target binaries referenced in this manifest, expressed as a compiler triple",
+          "type": "string"
+        },
+        "host-arch": {
+          "description": "The architecture for host binaries referenced in this manifest, expressed as a compiler triple",
           "type": "string"
         }
       },
       "required": [
+        "host-arch",
+        "target-arch"
+      ],
+      "additionalProperties": false
+    },
+    "cppTags": {
+      "description": "Tag definitions for the 'c-pp' domain",
+      "type": "object",
+      "properties": {
+        "domain": {
+          "description": "Marker for this type of tags",
+          "type": "string",
+          "enum": [
+            "c-pp"
+          ]
+        },
+        "type": {
+          "description": "The type of C/C++ artifact represented by this atom",
+          "type": "string",
+          "enum": [
+            "compiled_shared",
+            "compiled_static",
+            "sources",
+            "sysroot"
+          ]
+        },
+        "arch": {
+          "description": "Architecture for prebuilt types",
+          "$ref": "#/definitions/prebuiltArch"
+        }
+      },
+      "required": [
+        "domain",
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "exeTags": {
+      "description": "Tag definitions for the 'exe' domain",
+      "type": "object",
+      "properties": {
+        "domain": {
+          "description": "Marker for this type of tags",
+          "type": "string",
+          "enum": [
+            "exe"
+          ]
+        },
+        "arch": {
+          "description": "Architecture for prebuilt types",
+          "$ref": "#/definitions/prebuiltArch"
+        }
+      },
+      "required": [
+        "domain",
         "arch"
       ],
       "additionalProperties": false
+    },
+    "fidlTags": {
+      "description": "Tag definitions for the 'fidl' domain",
+      "type": "object",
+      "properties": {
+        "domain": {
+          "description": "Marker for this type of tags",
+          "type": "string",
+          "enum": [
+            "fidl"
+          ]
+        }
+      },
+      "required": [
+        "domain"
+      ],
+      "additionalProperties": false
+    },
+    "prebuiltArch": {
+      "description": "For prebuilt artifacts, whether this was built for host or target",
+      "type": "string",
+      "enum": [
+        "host",
+        "target"
+      ]
     }
   }
 }
