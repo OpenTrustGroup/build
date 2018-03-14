@@ -2,6 +2,9 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+# OpenTrustGroup specific configs
+import("//build/otg/config.gni")
+
 import("//build/config/clang/clang.gni")
 import("//build/config/fuchsia/bootdata.gni")
 import("//build/config/fuchsia/zircon.gni")
@@ -30,7 +33,7 @@ exec_script("//build/zircon/create_gn_rules.py",
               "--staging",
               rebase_path("$root_out_dir/zircon-gn"),
               "--zircon-user-build",
-              rebase_path("//out/build-zircon/build-\${target_cpu}"),
+              rebase_path("//out/build-zircon/build-\${zircon_project}"),
               "--zircon-tool-build",
               rebase_path("//out/build-zircon"),
             ],
@@ -38,9 +41,6 @@ exec_script("//build/zircon/create_gn_rules.py",
             zircon_files + supporting_templates)
 
 import("//zircon/public/config/boards.gni")
-
-# OpenTrustGroup specific configs
-import("//build/otg/config.gni")
 
 # Permit dependencies on testonly targets from packages.
 testonly = true
@@ -1022,9 +1022,11 @@ group("images") {
   foreach(board, zircon_boards) {
     deps += [
       ":local-${board}.esp.blk",
-      ":zedboot-${board}.vboot",
       ":zircon-${board}.vboot",
     ]
+    if (!disable_zedboot) {
+      deps += [ ":zedboot-${board}.vboot" ]
+    }
     if (target_cpu != "arm64") {
       deps += [ ":zedboot-${board}.esp.blk" ]
     }
