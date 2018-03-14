@@ -2,6 +2,9 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+# OpenTrustGroup specific configs
+import("//build/otg/config.gni")
+
 import("//build/config/clang/clang.gni")
 
 declare_args() {
@@ -10,7 +13,7 @@ declare_args() {
 
   # Zircon build directory for `target_cpu`, containing `.manifest` and
   # `.bin` files for Zircon's BOOTFS, BOOTDATA, and kernel image.
-  zircon_build_dir = "//out/build-zircon/build-${target_cpu}"
+  zircon_build_dir = "//out/build-zircon/build-${zircon_project}"
 }
 
 # Template for running a Zircon host tool as part of the build.
