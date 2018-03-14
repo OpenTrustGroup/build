@@ -47,7 +47,7 @@ bootdata("mkbootfs") {
   if (target_cpu == "x64") {
     bootdata_label = "//build/gn:bootdata-pc"
   } else {
-    bootdata_label = "//build/gn:bootdata-qemu"
+    bootdata_label = "//build/gn:bootdata-qemu-tz"
   }
 
   extra_input_labels = [bootdata_label] + extra_bootdata
