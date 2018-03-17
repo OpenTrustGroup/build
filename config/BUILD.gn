@@ -112,6 +112,11 @@ config("no_rtti") {
   cflags_objcc = cflags_cc
 }
 
+config("no_unused_private_field") {
+  cflags_cc = [ "-Wno-unused-private-field" ]
+  cflags_objcc = cflags_cc
+}
+
 config("default_include_dirs") {
   include_dirs = [
     "//",
