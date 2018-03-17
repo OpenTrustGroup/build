@@ -112,6 +112,15 @@ config("no_rtti") {
   cflags_objcc = cflags_cc
 }
 
+# TODO(SY): This is used to disable unused private field warning
+# Since we use machina's virtio queue as base of our libtipc, and
+# not sure if some private fields are required or not. This should
+# be removed after SMC transport layer has been implemented.
+config("no_unused_private_field") {
+  cflags_cc = [ "-Wno-unused-private-field" ]
+  cflags_objcc = cflags_cc
+}
+
 config("default_include_dirs") {
   include_dirs = [
     "//",
