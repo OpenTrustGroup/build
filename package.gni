@@ -386,7 +386,7 @@ template("package") {
       }
 
       if (need_package_json) {
-        package_json_file = "$pkg_out_dir/package"
+        package_json_file = "$pkg_out_dir/meta/package"
         package_json_target_name = "${target_name}_package_json"
 
         action(package_json_target_name) {
@@ -471,6 +471,7 @@ template("package") {
                  "--manifest",
                  rebase_path(partial_archive_manifest, root_build_dir),
                ] + contents
+        inputs = extra_inputs
         forward_variables_from(invoker,
                                [
                                  "deps",

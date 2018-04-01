@@ -139,7 +139,8 @@ action("finalize_manifests") {
 
     sources += [ package_manifest ]
 
-    response_file_args += [ "--manifest=" + rebase_path(package_manifest, root_build_dir) ]
+    response_file_args +=
+        [ "--manifest=" + rebase_path(package_manifest, root_build_dir) ]
   }
 
   # Finally, everything that will go into the final /system manifest.
@@ -174,7 +175,8 @@ action("finalize_manifests") {
 
     sources += [ package_manifest ]
 
-    response_file_args += [ "--manifest=" + rebase_path(package_manifest, root_build_dir) ]
+    response_file_args +=
+        [ "--manifest=" + rebase_path(package_manifest, root_build_dir) ]
   }
 
   foreach(package, _result.packages) {
@@ -485,38 +487,6 @@ zircon_tool_action("fvm.blk") {
   ]
 }
 
-# Convert fvm.blk into a Qemu Copy on Write compressed image. This provides a
-# runtime-mountable qemu disk image that is significantly smaller than a raw FVM
-# partition image, but not as small as a compressed sparse FVM image.
-action("fvm.blk.qcow2") {
-  visibility = [ ":*" ]
-  script = "//buildtools/${host_platform}/qemu/bin/qemu-img"
-
-  inputs = [
-    fvm_image_path,
-  ]
-
-  fvm_qcow2_image_path = fvm_image_path + ".qcow2"
-  outputs = [
-    fvm_qcow2_image_path,
-  ]
-
-  deps = [
-    ":fvm.blk",
-  ]
-
-  args = [
-    "convert",
-    "-f",
-    "raw",
-    "-O",
-    "qcow2",
-    "-c",
-    rebase_path(fvm_image_path),
-    rebase_path(fvm_qcow2_image_path),
-  ]
-}
-
 # This packs (compressed) fvm.blk into BOOTDATA_RAMDISK format,
 # used by the netboot-* targets below.
 bootdata_ramdisk("bootdata-fvm") {
@@ -755,6 +725,17 @@ bootdata_cmdline("zedboot_cmdline") {
   ]
 }
 
+# Let the build configuration choose some extra fixed command-line arguments
+# for zedboot.
+if (zedboot_cmdline_file != "") {
+  bootdata_cmdline("extra_zedboot_cmdline") {
+    visibility = [ ":*" ]
+    inputs = [
+      zedboot_cmdline_file,
+    ]
+  }
+}
+
 # Construct a minimal manifest containing only the few user binaries
 # that constitute zedboot, and the libraries they depend on.
 # TODO(mcgrathr): This could be made smaller by constraining the drivers
@@ -838,6 +819,9 @@ foreach(board, zircon_boards) {
       ":zedboot_cmdline",
       ":zedboot_manifest",
     ]
+    if (zedboot_cmdline_file != "") {
+      deps += [ ":extra_zedboot_cmdline" ]
+    }
     inputs = [
       "${zircon_build_dir}/${board}-kernel-bootdata.bin",
     ]
@@ -1041,5 +1025,5 @@ group("install") {
 }
 
 group("default") {
-  deps = [ ":images", ":netboot" ] + packages_labels
+  deps = [ ":images" ] + packages_labels
 }
