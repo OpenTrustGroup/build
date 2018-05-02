@@ -2,6 +2,10 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//build/config/clang/clang.gni")
+import("//build/config/sysroot.gni")
+import("//build/sdk/sdk_atom.gni")
+
 # A template for an action that builds a Go binary. Users should instead use the
 # go_binary or go_test rules.
 #
@@ -30,18 +34,12 @@
 #
 # At minimum there should be a go_dependencies declaration for the package to
 # be built.
-
-import("//build/config/clang/clang.gni")
-import("//build/config/sysroot.gni")
-import("//build/sdk/sdk_atom.gni")
-
-declare_args() {
-  # target_gen_dir is, for example with garnet, gen/garnet/go/src/foo/bar,
-  # whereas we need gen/go/src/garnet/foo/bar. To use, specify the following
-  # in your gn file: "${root_go_gen_dir}/$layer/path_relative_to_go_src.
-  # E.g., output_file = "$root_go_gen_dir/garnet/ktrace/gen_records/gen_records.go"
-  root_go_gen_dir = "${root_gen_dir}/go/src"
-}
+#
+# Parameters
+#
+#   sdk_candidate (optional)
+#     Whether the binary may be included in an SDK.
+#     Defaults to false.
 
 template("go_build") {
   assert(defined(invoker.gopackage),
@@ -80,6 +78,14 @@ template("go_build") {
       "//build/go/gen_libraries.py",
     ]
 
+    # The same Go toolchain is used for host and target.
+    # It lives in $root_out_dir/goroot for the target's value of root_out_dir.
+    # TODO(dje): Move go toolchain to host root_out_dir. It runs on the host.
+    target_root_out_dir = get_label_info("//third_party/go:go_runtime($target_toolchain)", "root_out_dir")
+    go_root = rebase_path("$target_root_out_dir/goroot")
+
+    deps += [ "//third_party/go:go_runtime" ]
+
     go_dependencies = []
     if (defined(invoker.go_dependencies)) {
       go_dependencies = invoker.go_dependencies
@@ -103,8 +109,8 @@ template("go_build") {
       current_cpu,
       "--current-os",
       current_os,
-      "--go-tool",
-      rebase_path("//buildtools/go"),
+      "--go-root",
+      go_root,
       "--binname",
       output_name,
       "--toolchain-prefix",
@@ -148,30 +154,30 @@ template("go_build") {
       invoker.gopackage,
     ]
 
-    deps += [ "//third_party/go:go_runtime" ]
-
     if (is_fuchsia) {
       deps += [ "//garnet/public/sdk:zircon_sysroot_export" ]
     }
   }
 
-  sdk_atom("${target_name}_sdk") {
-    domain = "exe"
-    name = output_name
+  if (defined(invoker.sdk_candidate) && invoker.sdk_candidate) {
+    sdk_atom("${target_name}_sdk") {
+      domain = "exe"
+      name = output_name
 
-    if (is_fuchsia) {
-      tags = [ "arch:target" ]
-    } else {
-      tags = [ "arch:host" ]
+      if (is_fuchsia) {
+        tags = [ "arch:target" ]
+      } else {
+        tags = [ "arch:host" ]
+      }
+
+      files = [
+        {
+          source = output_path
+          dest = output_name
+        },
+      ]
+
+      non_sdk_deps = [ ":$main_target_name" ]
     }
-
-    files = [
-      {
-        source = output_path
-        dest = output_name
-      },
-    ]
-
-    non_sdk_deps = [ ":$main_target_name" ]
   }
 }

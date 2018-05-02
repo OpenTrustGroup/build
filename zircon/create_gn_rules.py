@@ -26,11 +26,17 @@ from mako.template import Template
 # Packages included in the sysroot.
 SYSROOT_PACKAGES = ['c', 'zircon']
 
-# List of libraries with header files being transitioned from 'include/foo/foo.h' to
-# 'include/lib/foo/foo.h'. During the transition, both the library's 'include/' and 'include/lib'
-# directories are added to the include path so both old and new style #include work.
+# List of libraries with header files being transitioned from
+# 'include/foo/foo.h' to 'include/lib/foo/foo.h'. During the transition, both
+# the library's 'include/' and 'include/lib' directories are added to the
+# include path so both old and new style include work.
 # TODO(ZX-1871): Once everything in Zircon is migrated, remove this mechanism.
 LIBRARIES_BEING_MOVED = [ 'zx' ]
+
+# Prebuilt libraries for which headers shouldn't be included in an SDK.
+# While this kind of mechanism exists in the GN build, there's no equivalent in
+# the make build and we have to manually curate these libraries.
+LIBRARIES_WITHOUT_SDK_HEADERS = [ 'trace-engine' ]
 
 
 def make_dir(path, is_dir=False):
@@ -168,7 +174,7 @@ class CompiledLibrary(object):
 
        Convenience storage object to be consumed by Mako templates.'''
 
-    def __init__(self, name):
+    def __init__(self, name, with_sdk_headers):
         self.name = name
         self.includes = {}
         self.include_dirs = set()
@@ -178,12 +184,14 @@ class CompiledLibrary(object):
         self.impl_prebuilt = ''
         self.prebuilt = ''
         self.debug_prebuilt = ''
+        self.with_sdk_headers = with_sdk_headers
 
 
 def generate_compiled_library(package, context):
     '''Generates the build glue for a prebuilt library.'''
     lib_name = package['package']['name']
-    data = CompiledLibrary(lib_name)
+    data = CompiledLibrary(lib_name,
+                           lib_name not in LIBRARIES_WITHOUT_SDK_HEADERS)
 
     # Includes.
     for name, path in package.get('includes', {}).iteritems():
@@ -199,7 +207,7 @@ def generate_compiled_library(package, context):
         (name, path) = libs.items()[0]
         (file, _) = extract_file(name, path, context)
         data.prebuilt = '//%s' % file
-        data.lib_name = os.path.basename(file)
+        data.lib_name = os.path.basename(name)
     # TODO(jamesr): Delete the == 2 path once Zircon rolls up through all layers
     elif len(libs) == 2 or len(libs) == 3:
         # Shared library.
@@ -208,7 +216,7 @@ def generate_compiled_library(package, context):
             (file, _) = extract_file(name, path, context)
             if 'debug/' in name:
                 data.debug_prebuilt = '//%s' % file
-                data.lib_name = os.path.basename(file)
+                data.lib_name = os.path.basename(name)
             elif '.so.strip' in file:
                 data.has_impl_prebuilt = True
                 data.impl_prebuilt = '//%s' % file

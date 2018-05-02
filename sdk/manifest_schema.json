@@ -36,7 +36,8 @@
           "description": "The group of atoms this atom belongs to",
           "type": "string",
           "enum": [
-            "c-pp",
+            "cpp",
+            "dart",
             "exe",
             "fidl"
           ]
@@ -63,6 +64,17 @@
         "gn-label": {
           "description": "Label of the GN target which generated the atom",
           "type": "string"
+        },
+        "category": {
+          "description": "Publication level of this atom",
+          "type": "string",
+          "enum": [
+            "excluded",
+            "experimental",
+            "internal",
+            "partner",
+            "public"
+          ]
         },
         "files": {
           "description": "The files making up the atom",
@@ -92,6 +104,9 @@
               "$ref": "#/definitions/cppTags"
             },
             {
+              "$ref": "#/definitions/dartTags"
+            },
+            {
               "$ref": "#/definitions/exeTags"
             },
             {
@@ -101,6 +116,7 @@
         }
       },
       "required": [
+        "category",
         "deps",
         "files",
         "id",
@@ -154,14 +170,14 @@
       "additionalProperties": false
     },
     "cppTags": {
-      "description": "Tag definitions for the 'c-pp' domain",
+      "description": "Tag definitions for the 'cpp' domain",
       "type": "object",
       "properties": {
         "domain": {
           "description": "Marker for this type of tags",
           "type": "string",
           "enum": [
-            "c-pp"
+            "cpp"
           ]
         },
         "type": {
@@ -182,6 +198,23 @@
       "required": [
         "domain",
         "type"
+      ],
+      "additionalProperties": false
+    },
+    "dartTags": {
+      "description": "Tag definitions for the 'dart' domain",
+      "type": "object",
+      "properties": {
+        "domain": {
+          "description": "Marker for this type of tags",
+          "type": "string",
+          "enum": [
+            "dart"
+          ]
+        }
+      },
+      "required": [
+        "domain"
       ],
       "additionalProperties": false
     },

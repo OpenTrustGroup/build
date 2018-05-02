@@ -5,35 +5,25 @@
 declare_args() {
   # List of packages (a comma-separated string).  If unset, guessed based
   # on which layer is found in the //.jiri_manifest file.
-  # TODO(mcgrathr): This should be a GN list, not a string with commas.
-  fuchsia_packages = ""
+  fuchsia_packages = []
 }
 
-if (fuchsia_packages == "") {
+if (fuchsia_packages == []) {
   _jiri_manifest = "//.jiri_manifest"
   foreach(layer,
           exec_script("//build/gn/guess_layer.py",
                       [ rebase_path(_jiri_manifest) ],
                       "list lines",
                       [ _jiri_manifest ])) {
-    if (fuchsia_packages != "") {
-      fuchsia_packages += ","
-    }
-    fuchsia_packages += "$layer/packages/default"
+    fuchsia_packages += [ "$layer/packages/default" ]
   }
 }
 
+# A list of strings in GN syntax is valid JSON too.
 _preprocessed_packages = exec_script("prepreprocess_build_packages.py",
-                                     [
-                                       "--packages",
-                                       fuchsia_packages,
-                                     ],
+                                     [ "--packages=$fuchsia_packages" ],
                                      "scope",
                                      [ "package_imports_resolver.py" ])
 
-packages_have_cpp = _preprocessed_packages.have_cpp
-packages_have_dart = _preprocessed_packages.have_dart
-packages_have_go = _preprocessed_packages.have_go
-packages_have_rust = _preprocessed_packages.have_rust
 packages_imported = _preprocessed_packages.imported
 packages_labels = _preprocessed_packages.labels

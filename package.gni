@@ -4,12 +4,6 @@
 
 import("//build/config/clang/clang.gni")
 
-declare_args() {
-  # Build packages as FAR archives and store them in /system. This is required
-  # for --bootfs builds.
-  bootfs_packages = false
-}
-
 # Defines a package
 #
 # The package template is used to define a unit of related code and data.
@@ -20,8 +14,9 @@ declare_args() {
 #
 #   fuchsia_package (bool, optional)
 #     If true, the package is constructed and signed ready for distribution and
-#     inclusion in /pkgfs. system_image supersedes fuchsia_package. Eventually all
-#     packages should be fuchsia_package.
+#     inclusion in /pkgfs. system_image supersedes fuchsia_package.
+#
+#     TODO(PKG-46) Eventually all packages should be fuchsia_package..
 #
 #     Defaults to false.
 #
@@ -34,6 +29,9 @@ declare_args() {
 #     archives.
 #
 #     Defaults to false.
+#
+#   deprecated_system_image (bool, optional)
+#     New alias for system_image to reflect its deprecated status, per PKG-46.
 #
 #   boot_firmware_image (bool, optional)
 #     If true, the package is a boot firmware package instead of a regular
@@ -156,11 +154,9 @@ declare_args() {
 template("package") {
   if (current_toolchain == target_toolchain) {
     pkg = {
-      # By default we want to build Fuchsia packages, but they are not
-      # supported under bootfs, so in that case we build the old archive format
-      # packages.
-      fuchsia_package = !bootfs_packages
+      fuchsia_package = true
       system_image = false
+      deprecated_system_image = false
       boot_firmware_image = false
       binaries = []
       drivers = []
@@ -173,6 +169,10 @@ template("package") {
       forward_variables_from(invoker, "*")
     }
     pkg_out_dir = "$root_build_dir/package/${pkg.package_name}"
+
+    if (pkg.deprecated_system_image) {
+      pkg.system_image = true
+    }
 
     shared_toolchain_out_dir =
         get_label_info("//lib($shlib_toolchain)", "root_out_dir")
@@ -220,6 +220,7 @@ template("package") {
         output = archive_manifest
       }
       action(extra_target_name) {
+        forward_variables_from(invoker, [ "testonly" ])
         deps = [ ":${manifest_target_name}" ] + invoker.deps
         inputs = [ partial ] + pkg.extra
         outputs = [
@@ -259,7 +260,7 @@ template("package") {
     }
     foreach(binary, pkg.binaries) {
       assert(
-          pkg.system_image,
+          (pkg.system_image || pkg.fuchsia_package),
           "Binaries cannot be used in archived packages. Consider using 'binary'.")
 
       # Binary paths are relative to the root of the build dir.
@@ -405,7 +406,7 @@ template("package") {
 
         full_pkg_json_file = rebase_path(package_json_file)
         contents += [ "meta/package=${full_pkg_json_file}" ]
-        extra_inputs += [ source ]
+        extra_inputs += [ package_json_file ]
       }
 
       action(manifest_target_name) {

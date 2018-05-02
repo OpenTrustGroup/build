@@ -29,8 +29,9 @@ declare_args() {
 #     It does not need to use explicit toolchain suffixes; the only target
 #     using the deps will be instantiated only in host_toolchain.
 #
+#   testonly (optional)
 #   visibility (optional)
-#     [label pattern list] Standard GN meaning.
+#     Standard GN meaning.
 #
 # Example of usage:
 #
@@ -44,13 +45,14 @@ template("install_host_tools") {
 
   # There is more than one host_toolchain when variants are involved,
   # but all those copy their executables to the base host_toolchain
-  # (which current_base_toolchain points to in every host_toolchain).
+  # (which toolchain_variant.base points to in every host_toolchain).
   if (current_toolchain == host_toolchain &&
-      current_toolchain == current_base_toolchain) {
+      current_toolchain == toolchain_variant.base) {
     copy(target_name) {
       forward_variables_from(invoker,
                              [
                                "deps",
+                               "testonly",
                                "visibility",
                              ])
       if (defined(visibility)) {
@@ -66,18 +68,22 @@ template("install_host_tools") {
     }
   } else {
     # Redirect to the base host_toolchain, where the copy rule above is.
-    # In a variant host_toolchain context, current_base_toolchain points
+    # In a variant host_toolchain context, toolchain_variant.base points
     # there, while host_toolchain always matches current_toolchain.
     group(target_name) {
       if (current_toolchain == host_toolchain) {
-        toolchain = current_base_toolchain
+        toolchain = toolchain_variant.base
       } else {
         toolchain = host_toolchain
       }
       deps = [
         ":$target_name($toolchain)",
       ]
-      forward_variables_from(invoker, [ "visibility" ])
+      forward_variables_from(invoker,
+                             [
+                               "testonly",
+                               "visibility",
+                             ])
       not_needed(invoker,
                  [
                    "deps",

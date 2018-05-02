@@ -23,14 +23,13 @@ if (current_toolchain == dart_toolchain) {
       command = copy_command
       description = copy_description
     }
-  }
 
-  # $dart_host_sdk_toolchain points to this.  It's the toolchain
-  # used to build a host-native Dart (whereas $host_toolchain builds
-  # cross-Dart that runs on the host and targets $target_cpu).  We
-  # define it as a parallel to host_toolchain that's identical in
-  # every way, but has a separate name so that the Dart GN files can
-  # treat it differently.
-  clang_host_toolchain_suite("dart_host_${host_cpu}") {
+    toolchain_args = {
+      toolchain_variant = {
+      }
+      toolchain_variant = {
+        base = get_label_info(":dartlang", "label_no_toolchain")
+      }
+    }
   }
 }

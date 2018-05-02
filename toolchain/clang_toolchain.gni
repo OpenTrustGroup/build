@@ -5,7 +5,6 @@
 import("//build/config/clang/clang.gni")
 import("//build/toolchain/ccache.gni")
 import("//build/toolchain/goma.gni")
-import("//build/toolchain/variant.gni")
 
 # Each toolchain must define "stamp" and "copy" tools,
 # but they are always the same in every toolchain.
@@ -135,7 +134,8 @@ template("clang_toolchain") {
 
     tool("asm") {
       depfile = "{{output}}.d"
-      command = "$cc {{defines}} {{include_dirs}} {{asmflags}} -c {{source}} -o {{output}}"
+      command = "$cc -MD -MF $depfile {{defines}} {{include_dirs}} {{asmflags}} -c {{source}} -o {{output}}"
+      depsformat = "gcc"
       description = "ASM {{output}}"
       outputs = [
         "{{source_out_dir}}/{{target_output_name}}.{{source_name_part}}.o",
@@ -300,16 +300,46 @@ template("clang_toolchain") {
   }
 }
 
+# Private subroutine of clang_toolchain_suite(), below.
+template("_clang_toolchain_variant") {
+  this_variant = invoker.this_variant
+  this_invoker = invoker.this_invoker
+  not_needed([ "this_invoker" ])
+
+  # Every toolchain needs the global select_variant_canonical passed
+  # down explicitly via toolchain_args.  See BUILDCONFIG.gn.
+  pass_through_canonical = select_variant_canonical
+
+  clang_toolchain(target_name) {
+    forward_variables_from(invoker.clang_toolchain_args, "*")
+    toolchain_args = {
+      # GN's "can't overwrite a nonempty scope/list" rule also applies
+      # to shadowing bindings in inner scopes.  Since there is always
+      # a global binding of `toolchain_variant` that is being shadowed
+      # here, we have to set it to the empty scope first.
+      toolchain_variant = {
+      }
+      toolchain_variant = {
+        forward_variables_from(this_variant, "*")
+        is_pic_default = invoker.this_pic_default
+      }
+      if (defined(this_variant.toolchain_args)) {
+        forward_variables_from(this_variant.toolchain_args, "*")
+      }
+      if (defined(this_invoker.toolchain_args)) {
+        forward_variables_from(this_invoker.toolchain_args, "*")
+      }
+
+      # See comment above.
+      select_variant_canonical = []
+      select_variant_canonical = pass_through_canonical
+    }
+  }
+}
+
 # Defines a standard suite of Clang-based toolchains.
 #
 # Parameters
-#
-#   variants:
-#     Optional: Pre-set with the default list of supported variants from
-#     the `known_variants` and `extra_variants` build arguments, which see.
-#     The invoker scope can add remove to the list or remove variants from
-#     the list to control the set of variants available for this suite of
-#     toolchains.  Each variant (element of this list) is a list of configs.
 #
 #   with_shared:
 #     Optional: If this toolchain will have a "-shared" companion.
@@ -321,6 +351,98 @@ template("clang_toolchain") {
 # See clang_toolchain for others.  Most parameters are just forwarded there.
 #
 template("clang_toolchain_suite") {
+  # First get a canonicalized, flat list of variant specs that includes the
+  # null variant.  Canonical variants don't have `host_only`/`target_only` but
+  # instead take the body of one or the other, have [] for any missing list
+  # fields, have .suffix as well as .name (or implied .name), and have .base.
+  is_host = defined(invoker.toolchain_os) && invoker.toolchain_os == host_os
+  not_needed([ "is_host" ])
+  variants = []
+  foreach(variant, [ false ] + known_variants) {
+    variants += [
+      {
+        base = get_label_info(":$target_name", "label_no_toolchain")
+        configs = []
+        remove_common_configs = []
+        remove_shared_configs = []
+        deps = []
+        if (variant == false) {
+          name = ""
+          suffix = ""
+        } else {
+          if (is_host) {
+            if (defined(variant.host_only)) {
+              forward_variables_from(variant.host_only, "*")
+            }
+          } else {
+            if (defined(variant.target_only)) {
+              forward_variables_from(variant.target_only, "*")
+            }
+          }
+          forward_variables_from(variant,
+                                 "*",
+                                 [
+                                   "host_only",
+                                   "target_only",
+                                 ])
+          if (!defined(name)) {
+            name = ""
+            assert(configs != [],
+                   "variant with no name must include nonempty configs")
+            foreach(config, configs) {
+              if (name != "") {
+                name += "-"
+              }
+              name += get_label_info(config, "name")
+            }
+          }
+          suffix = "-$name"
+        }
+      },
+    ]
+  }
+
+  # Now elaborate the list with all the universal variant combinations.
+  # Each universal variant becomes its own standalone variant when
+  # combined with the null variant.
+  # TODO(crbug.com/818525): The `+ []` works around a bug that crashes
+  # GN with heap-use-after-free: the no-op `+` forces a copy of the list
+  # in `variants`; without it, GN uses the same std::vector object in
+  # the looping logic that it mutates in place for `variants +=`.
+  foreach(variant, variants + []) {
+    foreach(universal_variant, universal_variants) {
+      variants += [
+        {
+          forward_variables_from(variant, "*", [ "toolchain_args" ])
+          toolchain_args = {
+            if (defined(variant.toolchain_args)) {
+              forward_variables_from(variant.toolchain_args, "*")
+            }
+            if (defined(universal_variant.toolchain_args)) {
+              forward_variables_from(universal_variant.toolchain_args, "*")
+            }
+          }
+          if (name == "") {
+            name = universal_variant.name
+          } else {
+            name += "-${universal_variant.name}"
+          }
+          suffix += "-${universal_variant.name}"
+          configs += universal_variant.configs
+          if (defined(universal_variant.remove_common_configs)) {
+            remove_common_configs += universal_variant.remove_common_configs
+          }
+          if (defined(universal_variant.remove_shared_configs)) {
+            remove_shared_configs += universal_variant.remove_shared_configs
+          }
+          if (defined(universal_variant.deps)) {
+            deps += universal_variant.deps
+          }
+        },
+      ]
+    }
+  }
+
   # Exclude the arguments that are for us or are verboten.
   invoker_clang_toolchain_args = {
     forward_variables_from(invoker,
@@ -332,50 +454,70 @@ template("clang_toolchain_suite") {
                              "variants",
                            ])
   }
+  not_needed([ "invoker_clang_toolchain_args" ])
 
-  foreach(variant, [ [] ] + invoker.variants) {
-    # Each variant toolchain's name is formed by taking the base toolchain
-    # name and successively appending "-$name" for each config listed in
-    # the variant, where name is `get_label_name(config, "name")`.
-    # NOTE: This must match the method used in
-    # //build/config/BUILDCONFIG.gn:current_variant
-    suffix = ""
-    foreach(subvariant, variant) {
-      suffix += "-" + get_label_info(subvariant, "name")
-    }
+  # Build up an array of boolean that's parallel to `select_variant`.
+  # Below, we'll set `selectors_used[i]` to true when `select_variant[i]`
+  # matches the name of some variant.
+  selectors_used = []
+  i = 0
+  foreach(selector, select_variant_canonical) {
+    selectors_used += [ false ]
+    i = i + 1
+  }
 
-    toolchain_args_for_clang = {
-    }
-    toolchain_args_for_clang = {
-      toolchain_variant = variant
-      current_base_toolchain =
-          get_label_info(":$target_name", "label_no_toolchain")
-      if (defined(invoker.toolchain_args)) {
-        forward_variables_from(invoker.toolchain_args, "*")
+  foreach(variant, variants) {
+    # Figure out if this variant is actually used.  Don't bother to define
+    # toolchains for variants that are never used.  This cuts down on extra
+    # GN processing so `gn gen` is faster.  More importantly, it ensures
+    # that there isn't a toolchain defined using toolchain_args build
+    # arguments whose declare_args() block hasn't been imported because
+    # it's defined in a BUILD.gn file containing only configs that are
+    # never referenced by any target if the variant is never selected.
+    variant_used = variant.name == ""
+    if (!variant_used) {
+      i = 0
+      foreach(selector, select_variant_canonical) {
+        assert(defined(selector.variant),
+               "`select_variant` clause missing `variant` field: $selector")
+        if (selector.variant == variant.name) {
+          variant_used = true
+          selectors_used[i] = true
+        } else if (selector.variant == false) {
+          selectors_used[i] = true
+        }
+        i = i + 1
       }
     }
 
-    clang_toolchain("${target_name}${suffix}") {
-      forward_variables_from(invoker_clang_toolchain_args, "*")
-      toolchain_args = toolchain_args_for_clang
-    }
-
-    if (invoker.with_shared) {
-      assert(!invoker.is_pic_default,
-             "If setting is_pic_default, use with_shared=false")
-      clang_toolchain("${target_name}${suffix}-shared") {
-        forward_variables_from(invoker_clang_toolchain_args, "*")
-        toolchain_args = {
-          is_pic_default = true
-          forward_variables_from(toolchain_args_for_clang, "*")
+    if (variant_used) {
+      _clang_toolchain_variant("${target_name}${variant.suffix}") {
+        clang_toolchain_args = invoker_clang_toolchain_args
+        this_variant = variant
+        this_invoker = invoker
+        this_pic_default = false
+      }
+      if (invoker.with_shared) {
+        _clang_toolchain_variant("${target_name}${variant.suffix}-shared") {
+          clang_toolchain_args = invoker_clang_toolchain_args
+          this_variant = variant
+          this_invoker = invoker
+          this_pic_default = true
         }
       }
     }
   }
+
+  i = 0
+  foreach(selector, select_variant_canonical) {
+    assert(selectors_used[i],
+           "unknown variant in `select_variant` clause: ${selector}")
+    i = i + 1
+  }
+  not_needed([ "selectors_used" ])
 }
 
 set_defaults("clang_toolchain_suite") {
-  variants = known_variants + extra_variants
   with_shared = true
 }
 

@@ -15,7 +15,7 @@ config("${data.name}_config") {
   ]
 }
 
-if (!is_pic_default) {
+if (!toolchain_variant.is_pic_default) {
 
 # In the main toolchain, we just redirect to the same target in the shared
 # toolchain.
@@ -109,10 +109,10 @@ group("${data.name}") {
   ]
 }
 
-}  # !is_pic_default
+}  # !toolchain_variant.is_pic_default
 
 sdk_atom("${data.name}_sdk") {
-  domain = "c-pp"
+  domain = "cpp"
   name = "${data.name}"
 
   tags = [
@@ -123,12 +123,14 @@ sdk_atom("${data.name}_sdk") {
   shared_out_dir = get_label_info(":bogus($shlib_toolchain)", "root_out_dir")
 
   files = [
+    % if data.with_sdk_headers:
     % for dest, source in sorted(data.includes.iteritems()):
     {
       source = "${source}"
       dest = "include/${dest}"
     },
     % endfor
+    % endif
     {
       source = "$shared_out_dir/${data.lib_name}"
       dest = "lib/${data.lib_name}"
