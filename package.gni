@@ -4,6 +4,12 @@
 
 import("//build/config/clang/clang.gni")
 
+declare_args() {
+  # Build packages as FAR archives and store them in /system. This is required
+  # for --bootfs builds.
+  bootfs_packages = false
+}
+
 # Defines a package
 #
 # The package template is used to define a unit of related code and data.
@@ -154,7 +160,10 @@ import("//build/config/clang/clang.gni")
 template("package") {
   if (current_toolchain == target_toolchain) {
     pkg = {
-      fuchsia_package = true
+      # By default we want to build Fuchsia packages, but they are not
+      # supported under bootfs, so in that case we build the old archive format
+      # packages.
+      fuchsia_package = !bootfs_packages
       system_image = false
       deprecated_system_image = false
       boot_firmware_image = false
