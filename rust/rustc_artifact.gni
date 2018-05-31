@@ -4,7 +4,12 @@
 
 import("//build/config/clang/clang.gni")
 import("//build/fidl/toolchain.gni")
-import("//build/rust/rust_artifact.gni") # for rustc_prefix
+
+declare_args() {
+  # Sets a custom base directory for `rustc` and `cargo`.
+  # This can be used to test custom Rust toolchains.
+  rustc_prefix = "//buildtools/${host_platform}/rust/bin"
+}
 
 template("rustc_third_party_artifact") {
   # Dummy build target to match the one in rustc_artifact
@@ -16,14 +21,26 @@ template("rustc_third_party_artifact") {
     out_info_path = "${target_out_dir}/${target_name}_info.json"
 
     args = [
-      "--crate-name", crate_name,
-      "--output", rebase_path(out_info_path),
+      # This is a slight lie to the end user-- the crate name that
+      # users provide and that appears in Cargo.toml is the package name,
+      # which may be different than the crate name (the thing given to
+      # --extern). One example of this is the rust-crypto crate,
+      # whose real crate name is crypto, but which is published under
+      # the package name rust-crypto.
+      "--package-name",
+      crate_name,
+      "--output",
+      rebase_path(out_info_path),
     ]
-    outputs = [out_info_path]
+    outputs = [
+      out_info_path,
+    ]
   }
 
   group(target_name) {
-    public_deps = [":${build_target_name}"]
+    public_deps = [
+      ":${build_target_name}",
+    ]
   }
 }
 
@@ -35,7 +52,8 @@ template("rustc_third_party_artifact") {
 # of `type`, which must be one of bin/lib/staticlib/proc-macro. This is used to determine
 # the kind of artifact that is produced by rustc.
 template("rustc_artifact") {
-  assert(defined(invoker.type), "Must specify an artifact type (bin/lib/staticlib/proc-macro)")
+  assert(defined(invoker.type),
+         "Must specify an artifact type (bin/lib/staticlib/proc-macro)")
   type = invoker.type
 
   # bin: executable binary application
@@ -43,9 +61,9 @@ template("rustc_artifact") {
   # staticlib: a statically-linked system library, generally used for linking Rust into C
   # proc-macro: a procedural macro (such as a custom-derive)
   assert(
-    type == "bin" || type == "lib" || type == "staticlib" || type == "proc-macro",
-    "Artifact type must be one of: \"bin\", \"lib\", \"staticlib\", or \"proc-macro\""
-  )
+      type == "bin" || type == "lib" || type == "staticlib" ||
+          type == "proc-macro",
+      "Artifact type must be one of: \"bin\", \"lib\", \"staticlib\", or \"proc-macro\"")
   if (type == "lib") {
     # For now, lib == rlib, but this could change in future versions of rustc.
     # If/when this changes, we will likely want to transition manually rather
@@ -65,16 +83,9 @@ template("rustc_artifact") {
     version = "0.1.0"
   }
 
-  if (defined(invoker.source_dir)) {
-    source_dir = invoker.source_dir
-  } else {
-    source_dir = "."
-  }
-
   assert(
-    current_os == "mac" || current_os == "linux" || current_os == "fuchsia",
-    "current_os was neither mac, linux, nor fuchsia"
-  )
+      current_os == "mac" || current_os == "linux" || current_os == "fuchsia",
+      "current_os was neither mac, linux, nor fuchsia")
   if (current_os == "mac") {
     target_triple = "x86_64-apple-darwin"
     assert(current_cpu == "x64")
@@ -102,21 +113,26 @@ template("rustc_artifact") {
   if (type == "bin") {
     prefix = ""
     extension = ""
+    root_file = "src/main.rs"
   } else if (type == "rlib") {
     prefix = "lib"
     extension = ".rlib"
+    root_file = "src/lib.rs"
   } else if (type == "staticlib") {
     prefix = "staticlib"
     extension = ".a"
+    root_file = "src/lib.rs"
   } else if (type == "proc-macro") {
     prefix = "macro"
     extension = ".so"
+    root_file = "src/lib.rs"
   }
 
   third_party_build = "//third_party/rust-crates/rustc_deps:build-third-party"
   third_party_deps_data = "${root_out_dir}/rust_third_party/deps_data.json"
   first_party_crate_root = "${root_out_dir}/rust_crates"
   output_file = "${first_party_crate_root}/${prefix}${name}${extension}"
+  output_depfile = "${first_party_crate_root}/${prefix}${name}.d"
   test_output_file = "${root_out_dir}/${name}_${invoker.type}_test_rustc"
 
   build_target_name = "${target_name}_build"
@@ -135,22 +151,37 @@ template("rustc_artifact") {
       dep_build_target = "${dep_dir}:${dep_target_name}_build"
       dep_out_dir = get_label_info(dep_build_target, "target_out_dir")
       dep_info_path = "${dep_out_dir}/${dep_target_name}_build_info.json"
-      dep_info_paths += ["--dep-data", rebase_path(dep_info_path)]
+      dep_info_paths += [
+        "--dep-data",
+        rebase_path(dep_info_path),
+      ]
     }
   }
+
+  if (defined(invoker.source_root)) {
+    root_file = invoker.source_root
+  }
+  root_file = rebase_path(root_file)
+
+  cargo_toml_dir = "$target_gen_dir/$target_name"
 
   # Declare the action target that performs the build itself
   action(build_target_name) {
     script = "//build/rust/build_rustc_target.py"
 
-    forward_variables_from(invoker, [ "deps" ])
+    forward_variables_from(invoker,
+                           [
+                             "deps",
+                             "testonly",
+                           ])
     if (!defined(deps)) {
       deps = []
     }
     deps += [ third_party_build ]
     inputs = [
-      "./src",
+      root_file,
     ]
+    depfile = output_depfile
 
     if (defined(invoker.non_rust_deps)) {
       public_deps = invoker.non_rust_deps
@@ -159,63 +190,130 @@ template("rustc_artifact") {
     out_info_path = "${target_out_dir}/${target_name}_info.json"
 
     args = [
-      "--rustc", rebase_path("$rustc_prefix/rustc"),
-      "--crate-root", rebase_path(source_dir),
-      "--crate-type", type,
-      "--crate-name", name,
-      "--opt-level", opt_level,
-      "--output-file", rebase_path(output_file),
-      "--test-output-file", rebase_path(test_output_file),
-      "--target", target_triple,
-      "--cmake-dir", rebase_path("//buildtools/cmake/bin"),
-      "--shared-libs-root", rebase_path(
+      "--rustc",
+      rebase_path("$rustc_prefix/rustc"),
+      "--crate-root",
+      rebase_path(root_file),
+      "--cargo-toml-dir",
+      rebase_path(cargo_toml_dir),
+      "--crate-type",
+      type,
+      "--crate-name",
+      name,
+      "--opt-level",
+      opt_level,
+      "--depfile",
+      rebase_path(output_depfile),
+      "--root-out-dir",
+      rebase_path(root_out_dir),
+      "--output-file",
+      rebase_path(output_file),
+      "--test-output-file",
+      rebase_path(test_output_file),
+      "--target",
+      target_triple,
+      "--cmake-dir",
+      rebase_path("//buildtools/cmake/bin"),
+      "--shared-libs-root",
+      rebase_path(
           get_label_info("//default($shlib_toolchain)", "root_out_dir")),
-      "--first-party-crate-root", rebase_path(first_party_crate_root),
-      "--third-party-deps-data", rebase_path(third_party_deps_data),
-      "--out-info", rebase_path(out_info_path),
-      "--version", version,
+      "--first-party-crate-root",
+      rebase_path(first_party_crate_root),
+      "--third-party-deps-data",
+      rebase_path(third_party_deps_data),
+      "--out-info",
+      rebase_path(out_info_path),
+      "--version",
+      version,
     ]
     if (with_unit_tests) {
       args += [ "--with-unit-tests" ]
     }
 
     if (is_fuchsia) {
-      deps += [ "//garnet/public/sdk:zircon_sysroot_export" ]
+      deps += [
+        "//garnet/public/sdk:zircon_sysroot_export",
+
+        # These libraries are required by libstd.
+        "//zircon/public/lib/backtrace",
+        "//zircon/public/lib/fdio",
+        "//zircon/public/lib/launchpad",
+      ]
       args += [
-        "--clang_prefix", rebase_path(clang_prefix, "", root_out_dir),
-        "--sysroot", rebase_path("$root_out_dir/sdks/zircon_sysroot/sysroot"),
+        "--clang_prefix",
+        rebase_path(clang_prefix, "", root_out_dir),
+        "--sysroot",
+        rebase_path("$root_out_dir/sdks/zircon_sysroot/sysroot"),
       ]
     }
     args += dep_info_paths
-    outputs = [ output_file ]
+    outputs = [
+      output_file,
+    ]
     if (with_unit_tests) {
       outputs += [ test_output_file ]
     }
   }
 
+  # Copy binaries and staticlibs out of rust_crates/* into the root dir
+  # TODO(cramertj) remove and replace with writing directly to the root
+  # dir once all existing build rules have moved off of using rust_crates/*
+  if (type == "bin" || type == "staticlib") {
+    copy_target_name = "${target_name}_copy"
+    group_deps += [ ":${copy_target_name}" ]
+    copy(copy_target_name) {
+      deps = [
+        ":${build_target_name}",
+      ]
+      sources = [
+        output_file,
+      ]
+      outputs = [
+        "${root_out_dir}/${prefix}${name}${extension}",
+      ]
+    }
+  }
+
   cargo_toml_target_name = "${target_name}_cargo"
   group_deps += [ ":${cargo_toml_target_name}" ]
-  cargo_toml_dir = target_out_dir
   action(cargo_toml_target_name) {
     script = "//build/rust/write_cargo_toml.py"
-    forward_variables_from(invoker, [ "deps" ])
+    forward_variables_from(invoker,
+                           [
+                             "deps",
+                             "testonly",
+                           ])
     if (!defined(deps)) {
       deps = []
     }
     deps += [ third_party_build ]
+    if (defined(invoker.non_rust_deps)) {
+      public_deps = invoker.non_rust_deps
+    }
     args = [
-      "--out-dir", rebase_path(cargo_toml_dir),
-      "--crate-name", name,
-      "--crate-type", type,
-      "--version", version,
-      "--third-party-deps-data", rebase_path(third_party_deps_data),
+      "--out-dir",
+      rebase_path(cargo_toml_dir),
+      "--source-root",
+      root_file,
+      "--crate-name",
+      name,
+      "--crate-type",
+      type,
+      "--version",
+      version,
+      "--third-party-deps-data",
+      rebase_path(third_party_deps_data),
     ]
+
     # list of paths to info about crate dependencies
     args += dep_info_paths
-    outputs = [ "${cargo_toml_dir}/Cargo.toml" ]
+    outputs = [
+      "${cargo_toml_dir}/Cargo.toml",
+    ]
   }
 
   group(target_name) {
+    forward_variables_from(invoker, [ "testonly" ])
     public_deps = group_deps
   }
 }

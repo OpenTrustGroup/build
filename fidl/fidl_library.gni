@@ -12,7 +12,7 @@ import("//build/sdk/sdk_atom.gni")
 # The parameters for this template are defined in //build/fidl/fidl.gni. The
 # relevant parameters in this template are:
 #   - name;
-#   - sdk_candidate;
+#   - sdk_category;
 #   - sources.
 
 template("fidl_library") {
@@ -31,7 +31,13 @@ template("fidl_library") {
   response_file = "$target_gen_dir/$target_name.args"
   fidl_stem = "$target_gen_dir/$target_name.fidl"
   json_representation = "$fidl_stem.json"
-  c_header = "$root_gen_dir/fuchsia/c/$library_name.h"
+  c_stem = exec_script("//build/fidl/c_stem_from_library.py",
+      [
+        "--name",
+        library_name,
+      ],
+      "trim string")
+  c_header = "$root_gen_dir/$c_stem.h"
   coding_tables = "$fidl_stem.tables.cc"
 
   main_target_name = target_name
@@ -183,7 +189,7 @@ template("fidl_library") {
     ]
   }
 
-  if (defined(invoker.sdk_candidate) && invoker.sdk_candidate) {
+  if (defined(invoker.sdk_category) && invoker.sdk_category != "excluded") {
     library_name = target_name
     if (defined(invoker.name)) {
       library_name = invoker.name
@@ -192,6 +198,8 @@ template("fidl_library") {
     sdk_atom("${target_name}_sdk") {
       domain = "fidl"
       name = library_name
+
+      category = invoker.sdk_category
 
       files = []
       foreach(source, invoker.sources) {

@@ -8,12 +8,20 @@ import("//build/sdk/sdk_atom.gni")
 #
 # An equivalent to the built-in executable which adds an SDK atom declaration to
 # allow the resulting binary to be included in an SDK.
+#
+#   category (required)
+#     Publication level of the library in SDKs.
+#     See //build/sdk/sdk_atom.gni.
 
 template("sdk_executable") {
+  assert(defined(invoker.category), "Must define an SDK category")
+
   main_target_name = target_name
 
   executable(main_target_name) {
-    forward_variables_from(invoker, "*")
+    forward_variables_from(invoker, "*", [
+      "category",
+    ])
   }
 
   output_name = target_name
@@ -24,6 +32,8 @@ template("sdk_executable") {
   sdk_atom("${target_name}_sdk") {
     domain = "exe"
     name = output_name
+
+    category = invoker.category
 
     if (is_fuchsia) {
       tags = [ "arch:target" ]

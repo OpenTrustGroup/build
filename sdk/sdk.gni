@@ -13,6 +13,10 @@ import("sdk_molecule.gni")
 #     Name of the SDK.
 #     Defaults to the target's name.
 #
+#   category (required)
+#     Describes the minimum category that atoms in this SDK must have.
+#     See //build/sdk/sdk_atom.gni for possible values.
+#
 #   export (optional)
 #     Whether to export the contents of this SDK to the output directory.
 #     This is useful when an SDK-like file structure is needed as part of the
@@ -33,6 +37,8 @@ import("sdk_molecule.gni")
 #     Only the "cpp" domain is currently supported.
 
 template("sdk") {
+  assert(defined(invoker.category), "Must define an SDK category")
+
   main_target_name = target_name
   generation_target_name = "${target_name}_molecule"
   copy_target_name = "${target_name}_copy"
@@ -70,6 +76,8 @@ template("sdk") {
                              "old_school",
                            ])
 
+    category = invoker.category
+
     metadata = [
       {
         key = "target-arch"
@@ -90,6 +98,8 @@ template("sdk") {
 
   # Copies the manifest to a central location.
   copy(copy_target_name) {
+    forward_variables_from(invoker, [ "testonly" ])
+
     sources = [
       "$target_gen_dir/$generation_target_name.sdk",
     ]
@@ -105,6 +115,8 @@ template("sdk") {
 
   # Verifies that the manifest is valid.
   compiled_action(verification_target_name) {
+    forward_variables_from(invoker, [ "testonly" ])
+
     tool = "//build/tools/json_validator"
 
     stamp_file = "$target_gen_dir/$target_name.verified"
@@ -131,6 +143,8 @@ template("sdk") {
   }
 
   group(main_target_name) {
+    forward_variables_from(invoker, [ "testonly" ])
+
     deps = [
       ":$copy_target_name",
       ":$generation_target_name",

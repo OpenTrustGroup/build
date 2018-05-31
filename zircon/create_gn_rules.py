@@ -135,6 +135,7 @@ class SourceLibrary(object):
         self.include_dirs = set()
         self.sources = {}
         self.deps = []
+        self.fidl_deps = []
         self.libs = set()
 
 
@@ -159,6 +160,7 @@ def generate_source_library(package, context):
     # Dependencies.
     data.deps += filter_deps(package.get('deps', []))
     data.deps += filter_deps(package.get('static-deps', []))
+    data.fidl_deps = filter_deps(package.get('fidl-deps', []))
 
     # Libraries.
     if 'zircon' in package.get('deps', []):
@@ -179,6 +181,7 @@ class CompiledLibrary(object):
         self.includes = {}
         self.include_dirs = set()
         self.deps = []
+        self.fidl_deps = []
         self.lib_name = ''
         self.has_impl_prebuilt = False
         self.impl_prebuilt = ''
@@ -229,6 +232,7 @@ def generate_compiled_library(package, context):
     # Dependencies.
     data.deps += filter_deps(package.get('deps', []))
     data.deps += filter_deps(package.get('static-deps', []))
+    data.fidl_deps = filter_deps(package.get('fidl-deps', []))
 
     # Generate the build file.
     template = 'shared_library.mako' if is_shared else 'static_library.mako'
@@ -291,6 +295,34 @@ def generate_host_tool(package, context):
     generate_build_file(build_path, 'host_tool.mako', data, context)
 
 
+class FidlLibrary(object):
+    '''Represents a FIDL library.
+
+       Convenience storage object to be consumed by Mako templates.'''
+
+    def __init__(self, name, library):
+        self.name = name
+        self.library = library
+        self.sources = []
+        self.fidl_deps = []
+
+
+def generate_fidl_library(package, context):
+    '''Generates the build glue for a FIDL library.'''
+    pkg_name = package['package']['name']
+    # TODO(pylaligand): remove fallback.
+    data  = FidlLibrary(pkg_name, package['package'].get('library', pkg_name))
+
+    for name, path in package.get('fidl', {}).iteritems():
+        (file, _) = extract_file(name, path, context)
+        data.sources.append('//%s' % file)
+    data.fidl_deps = filter_deps(package.get('fidl-deps', []))
+
+    # Generate the build file.
+    build_path = os.path.join(context.out_dir, 'fidl', pkg_name, 'BUILD.gn')
+    generate_build_file(build_path, 'fidl.mako', data, context)
+
+
 def generate_board_list(package, context):
     '''Generates a configuration file with the list of target boards.'''
     build_path = os.path.join(context.out_dir, 'config', 'boards.gni')
@@ -332,6 +364,7 @@ def main():
 
     out_dir = os.path.abspath(args.out)
     shutil.rmtree(os.path.join(out_dir, 'config'), True)
+    shutil.rmtree(os.path.join(out_dir, 'fidl'), True)
     shutil.rmtree(os.path.join(out_dir, 'lib'), True)
     shutil.rmtree(os.path.join(out_dir, 'sysroot'), True)
     shutil.rmtree(os.path.join(out_dir, 'tool'), True)
@@ -397,6 +430,8 @@ def main():
             else:
                 type = 'prebuilt'
                 generate_compiled_library(package, context)
+        elif type == 'fidl':
+            generate_fidl_library(package, context)
         else:
             print('(%s) Unsupported package type: %s/%s, skipping'
                   % (name, type, arch))

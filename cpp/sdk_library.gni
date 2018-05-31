@@ -11,6 +11,10 @@ import("//build/sdk/sdk_atom.gni")
 #   type (required)
 #     GN template type for the library.
 #
+#   category (required)
+#     Publication level of the library in SDKs.
+#     See //build/sdk/sdk_atom.gni.
+#
 #   sdk_name (optional)
 #     Name of the library in the SDK.
 #     If not specified, a name is inferred from the target's label.
@@ -25,10 +29,10 @@ import("//build/sdk/sdk_atom.gni")
 #     Defaults to "include".
 
 template("sdk_library") {
-  if (!defined(invoker.type)) {
-    assert(false, "Must specify a library type.")
-  }
+  assert(defined(invoker.type), "Must specify a library type.")
   library_type = invoker.type
+
+  assert(defined(invoker.category), "Must define an SDK category")
 
   main_target_name = target_name
   sdk_target_name = "${target_name}_sdk"
@@ -37,6 +41,7 @@ template("sdk_library") {
     forward_variables_from(invoker,
                            "*",
                            [
+                             "category",
                              "include_base",
                              "sdk_name",
                              "source_dir",
@@ -88,6 +93,8 @@ template("sdk_library") {
     } else {
       name = atom_name
     }
+
+    category = invoker.category
 
     tags = [ "type:sources" ]
 

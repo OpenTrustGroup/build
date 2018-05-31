@@ -1,6 +1,5 @@
 <%include file="header.mako" />
 
-import("//build/gn/config.gni")
 import("//build/sdk/sdk_atom.gni")
 
 _lib = "$target_out_dir/${data.lib_name}"
@@ -38,6 +37,9 @@ group("${data.name}") {
     % for dep in sorted(data.deps):
     "../${dep}",
     % endfor
+    % for dep in sorted(data.fidl_deps):
+    "../../fidl/${dep}",
+    % endfor
   ]
 
   public_configs = [
@@ -48,6 +50,7 @@ group("${data.name}") {
 sdk_atom("${data.name}_sdk") {
   domain = "cpp"
   name = "${data.name}"
+  category = "partner"
 
   tags = [
     "type:compiled_static",

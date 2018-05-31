@@ -6,6 +6,7 @@
 
 import 'dart:async';
 import 'dart:io';
+import 'package:fuchsia/fuchsia.dart' as fuchsia;
 import 'package:test/src/backend/declarer.dart';
 import 'package:test/src/backend/group.dart';
 import 'package:test/src/backend/suite_platform.dart';
@@ -17,6 +18,8 @@ import 'package:test/src/runner/engine.dart';
 import 'package:test/src/runner/plugin/environment.dart';
 import 'package:test/src/runner/reporter/expanded.dart';
 
+typedef MainFunction = void Function();
+
 /// Use `package:test` internals to run test functions.
 ///
 /// `package:test` doesn't offer a public API for running tests. This calls
@@ -25,7 +28,7 @@ import 'package:test/src/runner/reporter/expanded.dart';
 /// See: https://github.com/dart-lang/test/issues/48
 ///      https://github.com/dart-lang/test/issues/12
 ///      https://github.com/dart-lang/test/issues/99
-Future<bool> runFuchsiaTests(List<Function> mainFunctions) async {
+Future<bool> runFuchsiaTests(List<MainFunction> mainFunctions) async {
   final Declarer declarer = new Declarer();
 
   // TODO: use a nested declarer for each main?
@@ -33,13 +36,11 @@ Future<bool> runFuchsiaTests(List<Function> mainFunctions) async {
 
   final Group group = declarer.build();
 
-  final SuitePlatform platform = new SuitePlatform(
-      Runtime.vm,
+  final SuitePlatform platform = new SuitePlatform(Runtime.vm,
       os: OperatingSystem.findByIoName(Platform.operatingSystem),
       inGoogle: false);
   final RunnerSuite suite = new RunnerSuite(
-      const PluginEnvironment(), SuiteConfiguration.empty, group,
-      platform);
+      const PluginEnvironment(), SuiteConfiguration.empty, group, platform);
 
   final Engine engine = new Engine();
   engine.suiteSink.add(suite);
@@ -48,4 +49,8 @@ Future<bool> runFuchsiaTests(List<Function> mainFunctions) async {
       color: false, printPath: false, printPlatform: false);
 
   return engine.run();
+}
+
+void exitFuchsiaTest(int returnCode) {
+  fuchsia.exit(returnCode);
 }

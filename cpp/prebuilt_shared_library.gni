@@ -8,6 +8,10 @@ import("//build/sdk/sdk_atom.gni")
 #
 # Parameters
 #
+#   category (required)
+#     Publication level of the library in SDKs.
+#     See //build/sdk/sdk_atom.gni.
+#
 #   no_headers (optional)
 #     Whether to include the library's headers in the SDK.
 #     Defaults to false.
@@ -31,6 +35,8 @@ set_defaults("prebuilt_shared_library") {
 }
 
 template("prebuilt_shared_library") {
+  assert(defined(invoker.category), "Must define an SDK category")
+
   main_target_name = target_name
   manifest_target_name = "${target_name}_sdk_manifest"
   sdk_target_name = "${target_name}_sdk"
@@ -39,8 +45,9 @@ template("prebuilt_shared_library") {
     forward_variables_from(invoker,
                            "*",
                            [
-                             "no_headers",
+                             "category",
                              "include_base",
+                             "no_headers",
                              "runtime_deps",
                              "sdk_name",
                            ])
@@ -113,6 +120,8 @@ template("prebuilt_shared_library") {
       name = atom_name
     }
     tags = [ "type:compiled_shared" ]
+
+    category = invoker.category
 
     if (is_fuchsia) {
       tags += [ "arch:target" ]

@@ -1,6 +1,5 @@
 <%include file="header.mako" />
 
-import("//build/gn/config.gni")
 import("//build/sdk/sdk_atom.gni")
 
 if (current_toolchain != host_toolchain) {
@@ -20,6 +19,7 @@ copy("${data.name}") {
 sdk_atom("${data.name}_sdk") {
   domain = "exe"
   name = "${data.name}"
+  category = "partner"
 
   tags = [
     "arch:host",

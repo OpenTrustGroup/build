@@ -1,6 +1,5 @@
 <%include file="header.mako" />
 
-import("//build/gn/config.gni")
 import("//build/sdk/sdk_atom.gni")
 
 _out_dir = get_label_info(":bogus", "target_out_dir")
@@ -32,6 +31,7 @@ group("sysroot") {
 sdk_atom("sysroot_sdk") {
   domain = "cpp"
   name = "system"
+  category = "partner"
 
   tags = [
     "type:sysroot",

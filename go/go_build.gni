@@ -37,9 +37,9 @@ import("//build/sdk/sdk_atom.gni")
 #
 # Parameters
 #
-#   sdk_candidate (optional)
-#     Whether the binary may be included in an SDK.
-#     Defaults to false.
+#   sdk_category (optional)
+#     Publication level of the library in SDKs.
+#     See //build/sdk/sdk_atom.gni.
 
 template("go_build") {
   assert(defined(invoker.gopackage),
@@ -85,6 +85,14 @@ template("go_build") {
     go_root = rebase_path("$target_root_out_dir/goroot")
 
     deps += [ "//third_party/go:go_runtime" ]
+
+    if (is_fuchsia) {
+      deps += [
+        "//garnet/public/sdk:zircon_sysroot_export",
+        "//zircon/public/lib/fdio",
+        "//zircon/public/lib/launchpad",
+      ]
+    }
 
     go_dependencies = []
     if (defined(invoker.go_dependencies)) {
@@ -153,16 +161,14 @@ template("go_build") {
       "--package",
       invoker.gopackage,
     ]
-
-    if (is_fuchsia) {
-      deps += [ "//garnet/public/sdk:zircon_sysroot_export" ]
-    }
   }
 
-  if (defined(invoker.sdk_candidate) && invoker.sdk_candidate) {
+  if (defined(invoker.sdk_category) && invoker.sdk_category != "excluded") {
     sdk_atom("${target_name}_sdk") {
       domain = "exe"
       name = output_name
+
+      category = invoker.sdk_category
 
       if (is_fuchsia) {
         tags = [ "arch:target" ]

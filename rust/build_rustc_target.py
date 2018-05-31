@@ -9,6 +9,17 @@ import os
 import subprocess
 import sys
 
+# Updates the path of the main target in the depfile to the relative path
+# from base_path build_output_path
+def fix_depfile(depfile_path, base_path, build_output_path):
+    with open(depfile_path, "r") as depfile:
+        content = depfile.read()
+    content_split = content.split(': ', 1)
+    target_path = os.path.relpath(build_output_path, start=base_path)
+    new_content = "%s: %s" % (target_path, content_split[1])
+    with open(depfile_path, "w") as depfile:
+        depfile.write(new_content)
+
 # Creates the directory containing the given file.
 def create_base_directory(file):
     path = os.path.dirname(file)
@@ -33,6 +44,9 @@ def main():
     parser.add_argument("--crate-root",
                         help="Path to source directory",
                         required=True)
+    parser.add_argument("--cargo-toml-dir",
+                        help="Path to directory in which a Cargo.toml for this target may be generated",
+                        required=True)
     parser.add_argument("--crate-type",
                         help="Type of crate to build",
                         required=True,
@@ -49,6 +63,12 @@ def main():
                         choices=["0", "1", "2", "3", "s", "z"])
     parser.add_argument("--output-file",
                         help="Path at which the output file should be stored",
+                        required=True)
+    parser.add_argument("--depfile",
+                        help="Path at which the output depfile should be stored",
+                        required=True)
+    parser.add_argument("--root-out-dir",
+                        help="Root output dir on which depfile paths should be rebased",
                         required=True)
     parser.add_argument("--test-output-file",
                         help="Path at which the unit test output file should be stored if --with-unit-tests is supplied",
@@ -97,16 +117,11 @@ def main():
     env["PATH"] = "%s:%s" % (env["PATH"], args.cmake_dir)
     env["RUST_BACKTRACE"] = "1"
 
-    if args.crate_type == "bin":
-        file_path = os.path.join(args.crate_root, "src", "main.rs")
-    else:
-        file_path = os.path.join(args.crate_root, "src", "lib.rs")
-
     create_base_directory(args.output_file)
 
     call_args = [
         args.rustc,
-        file_path,
+        args.crate_root,
         "--crate-type=%s" % args.crate_type,
         "--crate-name=%s" % args.crate_name,
         "--target=%s" % args.target,
@@ -130,45 +145,56 @@ def main():
         for data_path in args.dep_data:
             dep_data = json.load(open(data_path))
             if dep_data["third_party"]:
-                crate = dep_data["crate_name"]
-                externs.append("%s=%s" % (crate, third_party_json["crates"][crate]["lib_path"]))
+                package_name = dep_data["package_name"]
+                crate_data = third_party_json["crates"][package_name]
+                crate = crate_data["crate_name"]
+                lib_path = crate_data["lib_path"]
             else:
-                externs.append("%s=%s" % (dep_data["crate_name"], dep_data["lib_path"]))
+                crate = dep_data["crate_name"]
+                lib_path = dep_data["lib_path"]
+            crate_underscore = crate.replace("-", "_")
+            externs.append("%s=%s" % (crate_underscore, lib_path))
 
     # add externs to arguments
     for extern in externs:
         call_args += ["--extern", extern]
 
-    # append the output file location-- this must be the last arg,
-    # as it's popped off below to change the location of the output
-    # file for tests
-    call_args.append("-o%s" % args.output_file)
+    # Build the depfile
+    depfile_args = call_args + [
+        "-o%s" % args.depfile,
+        "--emit=dep-info",
+    ]
+    retcode, stdout, stderr = run_command(depfile_args, env)
+    if retcode != 0:
+        print(stdout + stderr)
+        return retcode
+    fix_depfile(args.depfile, args.root_out_dir, args.output_file)
 
-    # Run rustc
-    retcode, stdout, stderr = run_command(call_args, env)
+    # Build the desired output
+    build_args = call_args + ["-o%s" % args.output_file]
+    retcode, stdout, stderr = run_command(build_args, env)
     if retcode != 0:
         print(stdout + stderr)
         return retcode
 
     # Build the test harness
     if args.with_unit_tests:
-        # remove the old output_file flag
-        call_args.pop()
-        call_args.extend([
+        build_test_args = call_args + [
             "-o%s" % args.test_output_file,
             "--test",
-        ])
-        retcode, stdout, stderr = run_command(call_args, env)
+        ]
+        retcode, stdout, stderr = run_command(build_test_args, env)
         if retcode != 0:
             print(stdout + stderr)
             return retcode
 
     # Write output dependency info
+    create_base_directory(args.out_info)
     with open(args.out_info, "w") as file:
         file.write(json.dumps({
             "crate_name": args.crate_name,
             "third_party": False,
-            "src_path": args.crate_root,
+            "cargo_toml_dir": args.cargo_toml_dir,
             "lib_path": args.output_file,
             "version": args.version,
         }, sort_keys=True, indent=4, separators=(",", ": ")))
