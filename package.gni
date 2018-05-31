@@ -77,12 +77,6 @@ template("pm_build_package") {
   }
 }
 
-declare_args() {
-  # Build packages as FAR archives and store them in /system. This is required
-  # for --bootfs builds.
-  bootfs_packages = false
-}
-
 # Defines a package
 #
 # The package template is used to define a unit of related code and data.
