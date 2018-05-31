@@ -8,4 +8,8 @@ declare_args() {
 
   # Enable this to disable building zedboot image
   disable_zedboot = false
+
+  # Build packages as FAR archives and store them in /system. This is required
+  # for --bootfs builds.
+  bootfs_packages = false
 }

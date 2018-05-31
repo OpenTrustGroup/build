@@ -2,6 +2,9 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+# OpenTrustGroup specific configs
+import("//build/otg/config.gni")
+
 import("//build/config/clang/clang.gni")
 import("//build/config/fuchsia/bootdata.gni")
 import("//build/gn/packages.gni")
@@ -243,6 +246,20 @@ pm_build_package("system_image.meta") {
   visibility = [ ":*" ]
   testonly = true
   manifest = ":system_image.manifest"
+}
+
+# Generate a BOOTDATA container of the compressed BOOTFS image for /system.
+bootdata("system_bootfs") {
+  assert(bootfs_packages,
+         "bootfs_packages=true required for /system bootfs images")
+
+  testonly = true
+  deps = [
+    ":system_image.manifest",
+  ]
+  inputs = [
+    system_manifest,
+  ]
 }
 
 # Now generate the blob manifest.  This lists all the source files
@@ -490,6 +507,25 @@ generate_fvm("fvm.data.sparse.blk") {
   args = fvm_sparse_args + [ "--data" ]
 }
 
+# This packs up Zircon with the command line to enable /system bootfs.
+bootdata("user_bootfs") {
+  visibility = [ ":*" ]
+  testonly = true
+
+  output_name = "user"
+  output_extension = "bootfs"
+
+  deps = [
+    ":bootdata",
+    ":system_image_cmdline",
+    ":system_bootfs",
+  ]
+  inputs = []
+  foreach(label, deps) {
+    inputs += get_target_outputs(label)
+  }
+}
+
 # This packs up Zircon with the command line to enable /system.
 bootdata("bootdata-blob") {
   visibility = [ ":*" ]
@@ -718,10 +754,15 @@ group("images") {
     ":legacy-images",
     ":zircon-boot-blob",
     ":zircon.vboot",
-    "zedboot",
   ]
+  if (!disable_zedboot) {
+    deps += [ ":zedboot" ]
+  }
   if (target_cpu != "arm64") {
     deps += [ ":local.esp.blk" ]
+  }
+  if (bootfs_packages) {
+    deps += [ ":user_bootfs" ]
   }
 }
 

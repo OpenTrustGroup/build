@@ -91,6 +91,9 @@
 #   packaged (optional)
 #     Whether this file should be added to Fuchsia packages.
 
+# OpenTrustGroup specific configs
+import("//build/otg/config.gni")
+
 template("sdk_atom") {
   assert(defined(invoker.domain), "Must define a domain name")
   domain_name = invoker.domain
