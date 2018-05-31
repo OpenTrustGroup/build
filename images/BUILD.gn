@@ -2,6 +2,9 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+# OpenTrustGroup specific configs
+import("//build/otg/config.gni")
+
 import("//build/config/clang/clang.gni")
 import("//build/config/fuchsia/bootdata.gni")
 import("//build/gn/packages.gni")
@@ -718,8 +721,10 @@ group("images") {
     ":legacy-images",
     ":zircon-boot-blob",
     ":zircon.vboot",
-    "zedboot",
   ]
+  if (!disable_zedboot) {
+    deps += [ ":zedboot" ]
+  }
   if (target_cpu != "arm64") {
     deps += [ ":local.esp.blk" ]
   }
