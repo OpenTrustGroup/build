@@ -1,17 +1,17 @@
-# Copyright 2016 The Fuchsia Authors. All rights reserved.
+# Copyright 2018 The Fuchsia Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import("//build/dart/dart_library.gni")
+import("//build/dart/dart.gni")
 import("//build/dart/toolchain.gni")
 
-# Defines a Dart test suite
+# Defines a Dart test suite that requires connecting to a remote target.
 #
 # Parameters
 #
-#   sources (optional)
+#   sources (required)
 #     The list of test files, which must be within source_dir.
-#     Note: this parameter will soon be mandatory (TO-776).
 #
 #   source_dir (optional)
 #     Directory containing the test sources. Defaults to "test".
@@ -24,14 +24,15 @@ import("//build/dart/toolchain.gni")
 #
 # Example of usage:
 #
-#   dart_test("baz_test") {
+#   dart_host_to_target_test("baz_test") {
 #     source_dir = "."
+#     sources = [ "foo_bar_baz_test.dart" ]
 #     deps = [
 #       "//foo/baz",
 #       "//third_party/dart-pkg/pub/test",
 #     ]
 #   }
-template("dart_test") {
+template("dart_remote_test") {
   main_target_name = target_name
   library_target_name = "${target_name}_library"
 
@@ -51,22 +52,15 @@ template("dart_test") {
 
     source_dir = sources_dir
 
-    if (defined(invoker.sources)) {
-      sources = invoker.sources
-    }
+    assert(defined(invoker.sources))
+
+    sources = invoker.sources
   }
 
   dart_target_gen_dir =
       get_label_info(":bogus($dart_toolchain)", "target_gen_dir")
+
   dot_packages_file = "$dart_target_gen_dir/$library_target_name.packages"
-
-  fuchsia_tester_label = "//third_party/dart-pkg/git/flutter/packages/flutter_tools:fuchsia_tester($host_toolchain)"
-  fuchsia_tester_out_dir = get_label_info(fuchsia_tester_label, "root_out_dir")
-  fuchsia_tester_bin = "$fuchsia_tester_out_dir/dart-tools/fuchsia_tester"
-
-  flutter_shell_label = "//third_party/flutter/shell/testing/($host_toolchain)"
-  flutter_shell_out_dir = get_label_info(flutter_shell_label, "root_out_dir")
-  flutter_shell_bin = "$flutter_shell_out_dir/flutter_tester"
 
   if (current_toolchain == host_toolchain) {
     invocation_file = "$root_out_dir/$target_name"
@@ -75,7 +69,7 @@ template("dart_test") {
   }
 
   action(main_target_name) {
-    script = "//build/dart/gen_test_invocation.py"
+    script = "//build/dart/gen_remote_test_invocation.py"
 
     testonly = true
 
@@ -86,20 +80,17 @@ template("dart_test") {
     args = [
       "--out",
       rebase_path(invocation_file),
-      "--source-dir",
-      rebase_path(sources_dir),
+      "--sources",
+    ] + rebase_path(invoker.sources, "", sources_dir) +
+    [
       "--dot-packages",
       rebase_path(dot_packages_file),
-      "--test-runner",
-      rebase_path(fuchsia_tester_bin),
-      "--flutter-shell",
-      rebase_path(flutter_shell_bin),
+      "--dart-binary",
+      rebase_path(prebuilt_dart),
     ]
 
     deps = [
       ":$library_target_name",
-      flutter_shell_label,
-      fuchsia_tester_label,
     ]
   }
 }

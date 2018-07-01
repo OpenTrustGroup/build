@@ -9,6 +9,9 @@ declare_args() {
   # Sets a custom base directory for `rustc` and `cargo`.
   # This can be used to test custom Rust toolchains.
   rustc_prefix = "//buildtools/${host_platform}/rust/bin"
+
+  # Sets the default LTO type for rustc bulids.
+  rust_lto = "unset"
 }
 
 template("rustc_third_party_artifact") {
@@ -72,10 +75,19 @@ template("rustc_artifact") {
   }
 
   if (defined(invoker.name)) {
-    name = invoker.name
+    package_name = invoker.name
   } else {
-    name = target_name
+    package_name = target_name
   }
+
+  crate_name = exec_script(
+      "//build/rust/package_name_to_crate_name.py",
+      [
+        "--package-name",
+        package_name,
+      ],
+      "trim string"
+  )
 
   if (defined(invoker.version)) {
     version = invoker.version
@@ -109,6 +121,25 @@ template("rustc_artifact") {
     opt_level = "z"
   }
 
+  if (type == "bin") {
+    if (defined(invoker.with_lto)) {
+      with_lto = invoker.with_lto
+    } else if (rust_lto != "unset") {
+      with_lto = rust_lto
+    } else if (is_debug) {
+      with_lto = "none"
+    } else {
+      # TODO(tkilbourn): turn this on after gathering more data on impact to build
+      # speed.
+      with_lto = "none"
+    }
+  } else {
+    with_lto = "none"
+  }
+  assert(
+      with_lto == "none" || with_lto == "thin" || with_lto == "fat",
+      "with_lto was neither none, thin, or fat")
+
   # Determine the prefix and extension for the output file based on the crate type
   if (type == "bin") {
     prefix = ""
@@ -131,9 +162,9 @@ template("rustc_artifact") {
   third_party_build = "//third_party/rust-crates/rustc_deps:build-third-party"
   third_party_deps_data = "${root_out_dir}/rust_third_party/deps_data.json"
   first_party_crate_root = "${root_out_dir}/rust_crates"
-  output_file = "${first_party_crate_root}/${prefix}${name}${extension}"
-  output_depfile = "${first_party_crate_root}/${prefix}${name}.d"
-  test_output_file = "${root_out_dir}/${name}_${invoker.type}_test_rustc"
+  output_file = "${first_party_crate_root}/${prefix}${crate_name}${extension}"
+  output_depfile = "${first_party_crate_root}/${prefix}${crate_name}.d"
+  test_output_file = "${root_out_dir}/${crate_name}_${invoker.type}_test_rustc"
 
   build_target_name = "${target_name}_build"
   group_deps += [ ":${build_target_name}" ]
@@ -189,9 +220,19 @@ template("rustc_artifact") {
 
     out_info_path = "${target_out_dir}/${target_name}_info.json"
 
+    # We want to force a recompile of the Rust world whenever Rust toolchain
+    # changes since artifacts from an older version of the toolchain may or
+    # may not be compatible with newer ones.
+    # To achieve this, we insert a synthetic argument to the script invocation.
+    cipd_version = read_file(
+            "//buildtools/${host_platform}/rust/.versions/rust.cipd_version",
+            "json")
+
     args = [
       "--rustc",
       rebase_path("$rustc_prefix/rustc"),
+      "--cipd-version",
+      cipd_version.instance_id,
       "--crate-root",
       rebase_path(root_file),
       "--cargo-toml-dir",
@@ -199,7 +240,9 @@ template("rustc_artifact") {
       "--crate-type",
       type,
       "--crate-name",
-      name,
+      crate_name,
+      "--package-name",
+      package_name,
       "--opt-level",
       opt_level,
       "--depfile",
@@ -226,6 +269,9 @@ template("rustc_artifact") {
       "--version",
       version,
     ]
+    if (with_lto != "none") {
+      args += [ "--lto", with_lto ]
+    }
     if (with_unit_tests) {
       args += [ "--with-unit-tests" ]
     }
@@ -237,7 +283,6 @@ template("rustc_artifact") {
         # These libraries are required by libstd.
         "//zircon/public/lib/backtrace",
         "//zircon/public/lib/fdio",
-        "//zircon/public/lib/launchpad",
       ]
       args += [
         "--clang_prefix",
@@ -269,7 +314,7 @@ template("rustc_artifact") {
         output_file,
       ]
       outputs = [
-        "${root_out_dir}/${prefix}${name}${extension}",
+        "${root_out_dir}/${prefix}${crate_name}${extension}",
       ]
     }
   }
@@ -295,8 +340,10 @@ template("rustc_artifact") {
       rebase_path(cargo_toml_dir),
       "--source-root",
       root_file,
+      "--package-name",
+      package_name,
       "--crate-name",
-      name,
+      crate_name,
       "--crate-type",
       type,
       "--version",
@@ -304,6 +351,10 @@ template("rustc_artifact") {
       "--third-party-deps-data",
       rebase_path(third_party_deps_data),
     ]
+
+    if (with_lto != "none") {
+      args += ["--lto", with_lto]
+    }
 
     # list of paths to info about crate dependencies
     args += dep_info_paths

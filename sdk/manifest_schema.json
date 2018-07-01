@@ -215,10 +215,28 @@
           "enum": [
             "dart"
           ]
+        },
+        "type": {
+          "description": "The type of Dart artifact represented by this atom",
+          "type": "string",
+          "enum": [
+            "library",
+            "tool"
+          ]
+        },
+        "package_name": {
+          "description": "For libraries, the Dart package name",
+          "type": "string"
+        }
+      },
+      "patternProperties": {
+        "^3p:.+": {
+          "type": "string"
         }
       },
       "required": [
-        "domain"
+        "domain",
+        "type"
       ],
       "additionalProperties": false
     },
@@ -254,10 +272,15 @@
           "enum": [
             "fidl"
           ]
+        },
+        "name": {
+          "description": "A FIDL library's name",
+          "type": "string"
         }
       },
       "required": [
-        "domain"
+        "domain",
+        "name"
       ],
       "additionalProperties": false
     },

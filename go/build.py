@@ -80,6 +80,16 @@ def main():
       for dep in args.go_dependency:
         dependencies.append(string.split(dep, '=', 1))
       dependencies.extend(get_libraries(args.go_dep_files).items())
+
+      # Make sure the user didn't specify multiple dependencies that all share
+      # the same destination.
+      dsts = set()
+      for dst, src in dependencies:
+        if dst in dsts:
+          raise ValueError('attempted to add dependency that already defined destination location: dst=%s' % (dst,))
+        else:
+          dsts.add(dst)
+
       for dst, src in dependencies:
         # |dst| must be relative
         if os.path.isabs(dst):
@@ -100,7 +110,7 @@ def main():
         canon_tgt = os.path.realpath(tgt)
         if not canon_tgt.startswith(canon_root_out_dir):
           raise ValueError("--go-dependency destination not in --root-out-dir: provided=%s, path=%s, realpath=%s" % (dst, tgt, canon_tgt))
-        os.symlink(src, tgt)
+        os.symlink(os.path.relpath(src, os.path.dirname(tgt)), tgt)
 
     gopath = os.path.abspath(project_path)
 

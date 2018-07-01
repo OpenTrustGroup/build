@@ -438,11 +438,15 @@ template("package") {
       # //build/images:ids.txt to collect.
       action("${pkg_target_name}.manifest") {
         visibility = [
-          ":${pkg_target_name}.meta",
+          ":${pkg_target_name}",
           "//build/images:blob.manifest",
           "//build/images:ids.txt",
         ]
         script = "/bin/cp"
+        # Add sources and deps so that the package gets rebuilt whenever they
+        # change.
+        sources = manifest_sources
+        deps = pkg.deps
         outputs = [
           "$target_out_dir/${target_name}.ids.txt",
         ]
@@ -473,9 +477,12 @@ template("package") {
       # dynamically linked libraries resolved.
       generate_manifest("${pkg_target_name}.manifest") {
         visibility = [
+          ":${pkg_target_name}",
           ":${pkg_target_name}.meta",
-          "//build/images:blob.manifest",
-          "//build/images:ids.txt",
+          ":${pkg_target_name}.blob.rsp",
+          ":${pkg_target_name}.pkgsvr_index.rsp",
+          ":${pkg_target_name}.amber_index.rsp",
+          "//build/images:*",
         ]
         sources = manifest_sources + get_target_outputs(":$pkg_meta_package")
         args = manifest_args +
@@ -490,6 +497,7 @@ template("package") {
           ":${pkg_target_name}.blob.rsp",
           ":${pkg_target_name}.pkgsvr_index.rsp",
           ":${pkg_target_name}.amber_index.rsp",
+          "//build/images:*",
         ]
         manifest = ":${pkg_target_name}.manifest"
       }
@@ -505,7 +513,7 @@ template("package") {
                        "//build/images:system_image.manifest",
                      ]
       }
-      deps = pkg.deps
+      deps = pkg.deps + [ ":${pkg_target_name}.manifest" ]
       data_deps = pkg.data_deps
       output_name = "${pkg_target_name}.system.rsp"
       response_file_contents = manifest_args
@@ -520,6 +528,7 @@ template("package") {
         # A real package needs blobs for all its contents and for its
         # synthesized meta.far file.
         deps = [
+          ":${pkg_target_name}.manifest",
           ":${pkg_target_name}.meta",
         ]
         response_file_contents = [
@@ -557,6 +566,7 @@ template("package") {
           # in the build, rather than its merkleroot.
           # TODO(mcgrathr): Make amber publish use pkgsvr index directly.
           deps = [
+            ":${pkg_target_name}.manifest",
             ":${pkg_target_name}.meta",
           ]
           response_file_contents = [

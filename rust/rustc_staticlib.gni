@@ -4,7 +4,7 @@
 
 import("//build/rust/rustc_artifact.gni")
 
-# Defines a Rust binary
+# Defines a Rust static library
 #
 # Parameters
 #
@@ -12,7 +12,7 @@ import("//build/rust/rustc_artifact.gni")
 #     Name of the crate as defined in its manifest file. If not specified, it is
 #     assumed to be the same as the target name.
 #
-#   version (optional)
+#   version
 #     Semver version of the crate as seen on crates.io.
 #
 #   deps (optional)
@@ -36,14 +36,9 @@ import("//build/rust/rustc_artifact.gni")
 #   output_name (optional)
 #     Name of the output file.
 #
-#   with_lto (optional)
-#     Force LTO to be enabled/disabled for the binary. Values are "none", "thin" and
-#     "fat". This value takes precedence over GN args or the default value for the
-#     type of build (debug or release).
-#
 # Example of usage:
 #
-#   rustc_binary("foo") {
+#   rustc_staticlib("foo") {
 #     deps = [
 #       "//garnet/public/rust/crates/bar",
 #       "//third_party/rust-crates/rustc_deps:clap",
@@ -52,8 +47,11 @@ import("//build/rust/rustc_artifact.gni")
 #     ]
 #     with_unit_tests = true
 #   }
-template("rustc_binary") {
-  rustc_artifact(target_name) {
+template("rustc_staticlib") {
+  rustc_target = "_${target_name}_rustc_artifact"
+  group_target = "${target_name}"
+
+  rustc_artifact(rustc_target) {
     forward_variables_from(invoker,
                            [
                              "name",
@@ -64,8 +62,34 @@ template("rustc_binary") {
                              "output_name",
                              "source_root",
                              "testonly",
-                             "with_lto",
                            ])
-    type = "bin"
+    type = "staticlib"
+  }
+
+  public_hdrs = []
+  if (defined(invoker.public)) {
+    public_hdrs += invoker.public
+  }
+
+  
+  header_target = "_${target_name}_staticlib_headers"
+  config_target = "_${target_name}_staticlib_config"
+
+  source_set(header_target) {
+    public = public_hdrs
+    visibility = [ ":$group_target" ]
+  }
+
+  config(config_target) {
+    libs = get_target_outputs(":${rustc_target}_build")
+    visibility = [ ":$group_target" ]
+  }
+
+  group(target_name) {
+    public_configs = [ ":$config_target" ]
+    public_deps = [
+      ":$rustc_target",
+      ":$header_target",
+    ]
   }
 }

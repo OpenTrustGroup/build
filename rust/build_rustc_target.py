@@ -41,6 +41,9 @@ def main():
     parser.add_argument("--rustc",
                         help="Path to rustc",
                         required=True)
+    parser.add_argument("--cipd-version",
+                        help="CIPD version of Rust toolchain",
+                        required=False)
     parser.add_argument("--crate-root",
                         help="Path to source directory",
                         required=True)
@@ -51,6 +54,9 @@ def main():
                         help="Type of crate to build",
                         required=True,
                         choices=["bin", "rlib", "staticlib", "proc-macro"])
+    parser.add_argument("--package-name",
+                        help="Name of package to build",
+                        required=True)
     parser.add_argument("--crate-name",
                         help="Name of crate to build",
                         required=True)
@@ -61,6 +67,10 @@ def main():
                         help="Optimization level",
                         required=True,
                         choices=["0", "1", "2", "3", "s", "z"])
+    parser.add_argument("--lto",
+                        help="Use LTO",
+                        required=False,
+                        choices=["thin", "fat"])
     parser.add_argument("--output-file",
                         help="Path at which the output file should be stored",
                         required=True)
@@ -133,6 +143,9 @@ def main():
         "--color=always",
     ]
 
+    if args.lto:
+        call_args += ["-Clto=%s" % args.lto]
+
     third_party_json = json.load(open(args.third_party_deps_data))
     search_paths = third_party_json["deps_folders"] + [ args.first_party_crate_root ]
     for path in search_paths:
@@ -168,7 +181,7 @@ def main():
     if retcode != 0:
         print(stdout + stderr)
         return retcode
-    fix_depfile(args.depfile, args.root_out_dir, args.output_file)
+    fix_depfile(args.depfile, os.getcwd(), args.output_file)
 
     # Build the desired output
     build_args = call_args + ["-o%s" % args.output_file]
@@ -193,6 +206,7 @@ def main():
     with open(args.out_info, "w") as file:
         file.write(json.dumps({
             "crate_name": args.crate_name,
+            "package_name": args.package_name,
             "third_party": False,
             "cargo_toml_dir": args.cargo_toml_dir,
             "lib_path": args.output_file,

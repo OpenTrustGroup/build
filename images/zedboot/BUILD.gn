@@ -2,33 +2,35 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//build/config/fuchsia/bootdata.gni")
+import("//build/config/fuchsia/zbi.gni")
 import("//build/images/boot.gni")
 import("//build/images/manifest.gni")
 
 declare_args() {
-  # File containing kernel command line arguments to roll into the
-  # bootdata image used for zedboot.
-  zedboot_cmdline_file = ""
-}
+  # List of kernel command line arguments to bake into the Zedboot image.
+  # See //zircon/docs/kernel_cmdline.md and
+  # [`zedboot_devmgr_config`](#zedboot_devmgr_config).
+  zedboot_cmdline_args = []
 
-bootdata_cmdline("zedboot_cmdline") {
-  visibility = [ ":*" ]
-  inputs = [
-    "cmdline.txt",
+  # Files containing additional kernel command line arguments to bake into
+  # the Zedboot image.  The contents of these files (in order) come after any
+  # arguments directly in [`zedboot_cmdline_args`](#zedboot_cmdline_args).
+  # These can be GN `//` source pathnames or absolute system pathnames.
+  zedboot_cmdline_files = []
+
+  # List of arguments to populate /boot/config/devmgr in the Zedboot image.
+  zedboot_devmgr_config = [
+    "netsvc.netboot=true",
+    "virtcon.font=18x32",
   ]
 }
 
-# Let the build configuration choose some extra fixed command-line arguments
-# for zedboot.
-if (zedboot_cmdline_file != "") {
-  bootdata_cmdline("extra_zedboot_cmdline") {
-    visibility = [ ":*" ]
-    inputs = [
-      zedboot_cmdline_file,
-    ]
-  }
-}
+# zedboot_image_paths aggregates a list of environment variable style strings of the form:
+# IMAGE_{NAME}_{TYPE}=path
+# path is relative to $root_build_dir
+# This will be written out at generation time and is later consumed by
+# //scripts and various tools to find the relevant images.
+zedboot_image_paths = []
 
 # Construct a minimal manifest containing only the few user binaries
 # that constitute zedboot, and the libraries they depend on.
@@ -42,6 +44,7 @@ zedboot_binary_patterns = [
   "bin/dlog",
   "bin/fshost",
   "bin/netsvc",
+  "bin/svchost",
   "bin/virtual-console",
   "driver/*",  # Drivers automagically cause devhost to be brought in.
 
@@ -76,62 +79,88 @@ generate_manifest("zedboot.manifest") {
     args += [ "--binary=" + pattern ]
   }
 }
+manifest_outputs = get_target_outputs(":zedboot.manifest")
+manifest_file = manifest_outputs[0]
 
-# zedboot-data.bin is a Zircon BOOTDATA file containing the
-# command line and BOOTFS pieces necessary to make Zircon be Zedboot.
-bootdata("zedboot-data") {
-  boot = true
+action("devmgr_config.txt") {
+  visibility = [ ":zbi" ]
+
+  script = "../manifest.py"
+  outputs = [
+    "$target_out_dir/$target_name",
+  ]
+
+  args = [ "--output=" + rebase_path(outputs[0], root_build_dir) ]
+  foreach(entry, zedboot_devmgr_config) {
+    args += [ "--entry=$entry" ]
+  }
+}
+
+zbi("zbi") {
+  output_name = "zedboot"
   deps = [
+    ":devmgr_config.txt",
     ":zedboot.manifest",
   ]
-  manifest_outputs = get_target_outputs(":zedboot.manifest")
   inputs = [
-    manifest_outputs[0],
+    "${zircon_build_dir}/zircon.bin",
+    manifest_file,
   ]
-  bootdata_deps = [ ":zedboot_cmdline" ]
-  if (zedboot_cmdline_file != "") {
-    bootdata_deps += [ ":extra_zedboot_cmdline" ]
-  }
-  deps += bootdata_deps
-  foreach(label, bootdata_deps) {
-    inputs += get_target_outputs(label)
-  }
+  manifest = [
+    {
+      outputs = [
+        "config/devmgr",
+      ]
+      sources = get_target_outputs(":devmgr_config.txt")
+    },
+  ]
+  cmdline = zedboot_cmdline_args
+  cmdline_inputs = zedboot_cmdline_files
 }
 
-# images/zedboot.bin combines the kernel image itself with
-# the BOOTDATA bits.  This single file can be booted by Gigaboot.
-bootdata("zedboot.bin") {
-  output_name = "images/zedboot.bin"
-  deps = [
-    ":zedboot-data",
-  ]
-  inputs = [
-    "$zircon_build_dir/zircon.bin",
-  ]
-  foreach(label, deps) {
-    inputs += get_target_outputs(label)
-  }
-}
+zedboot_zbi_outputs = get_target_outputs(":zbi")
+zedboot_image_paths += [ "IMAGE_ZEDBOOT_ZBI=" +
+                         rebase_path(zedboot_zbi_outputs[0], root_build_dir) ]
 
-vboot("zedboot") {
+# TODO(mcgrathr): Unclear why this exists as a separate variable from
+# IMAGE_ZEDBOOT_ZBI.  Perhaps the recovery image actually ought to be
+# one that doesn't netboot (i.e. different /boot/config/devmgr)?
+zedboot_image_paths += [ "IMAGE_ZIRCONR_ZBI=" +
+                         rebase_path(zedboot_zbi_outputs[0], root_build_dir) ]
+
+vboot("vboot") {
+  output_name = "zedboot"
   deps = [
-    ":zedboot.bin",
+    ":zbi",
   ]
 }
+vboot_outputs = get_target_outputs(":vboot")
+zedboot_image_paths +=
+    [ "IMAGE_ZEDBOOT_VBOOT=" + rebase_path(vboot_outputs[0], root_build_dir) ]
 
 if (target_cpu != "arm64") {
-  esp("zedboot") {
+  esp("esp") {
+    output_name = "zedboot"
     cmdline = "efi_cmdline.txt"
-    zedboot = ":zedboot.bin"
+    deps = [
+      ":zbi",
+    ]
+    zedboot = zedboot_zbi_outputs[0]
   }
+  esp_outputs = get_target_outputs(":esp")
+  zedboot_image_paths +=
+      [ "IMAGE_ZEDBOOT_ESP=" + rebase_path(esp_outputs[0], root_build_dir) ]
 }
 
 group("zedboot") {
   deps = [
-    ":zedboot.bin",
-    ":zedboot.vboot",
+    ":vboot",
+    ":zbi",
   ]
   if (target_cpu != "arm64") {
-    deps += [ ":zedboot.esp.blk" ]
+    deps += [ ":esp" ]
   }
 }
+
+# See definition of zedboot_image_paths for purpose.
+write_file("$root_build_dir/zedboot_image_paths.sh", zedboot_image_paths)

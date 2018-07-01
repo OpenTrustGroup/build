@@ -12,7 +12,7 @@ import sys
 
 class PackageImportsResolver:
     """Recursively resolves imports in build packages. See
-       https://fuchsia.googlesource.com/docs/+/master/build_packages.md
+       https://fuchsia.googlesource.com/docs/+/master/development/build/packages.md
        for more information about build packages.
 
        An observer may be used to perform additional work whenever an
@@ -87,13 +87,7 @@ class PackageLabelObserver:
         }
 
     def import_resolved(self, config, config_path):
-        # TODO(BLD-26): Remove the dict support when all package files
-        # have been converted.
-        packages = config.get('packages', [])
-        if (isinstance(packages, dict)):
-            packages = packages.values()
-        assert isinstance(packages, list)
-        self.json_result['targets'] += packages
+        self.json_result['targets'] += config.get('packages', [])
         self.json_result['data_deps'] += config.get('labels', [])
         self.json_result['host_tests'] += config.get('host_tests', [])
 
