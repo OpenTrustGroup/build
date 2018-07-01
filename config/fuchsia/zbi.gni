@@ -132,6 +132,12 @@ template("zbi") {
       inputs += invoker.ramdisk_inputs
     }
 
+    if (defined(invoker.container_inputs)) {
+      args += [ "--type=container" ]
+      args += rebase_path(invoker.container_inputs, root_build_dir)
+      inputs += invoker.container_inputs
+    }
+
     if (defined(invoker.cmdline) || defined(invoker.cmdline_inputs)) {
       args += [ "--type=cmdline" ]
       if (defined(invoker.cmdline)) {

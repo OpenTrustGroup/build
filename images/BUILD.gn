@@ -6,6 +6,7 @@
 import("//build/otg/config.gni")
 
 import("//build/config/clang/clang.gni")
+import("//build/config/fuchsia/bootdata.gni")
 import("//build/config/fuchsia/zbi.gni")
 import("//build/config/fuchsia/zircon.gni")
 import("//build/gn/packages.gni")
@@ -592,21 +593,18 @@ bootdata("system_bootfs") {
 }
 
 # This packs up Zircon with the command line and above system bootfs to enable /system.
-bootdata("user_bootfs") {
+zbi("user_bootfs") {
   testonly = true
 
   output_name = "user"
   output_extension = "bootfs"
 
   deps = [
-    ":bootdata",
-    ":system_image_cmdline",
+    ":fuchsia",
     ":system_bootfs",
   ]
-  inputs = []
-  foreach(label, deps) {
-    inputs += get_target_outputs(label)
-  }
+  inputs = get_target_outputs(":fuchsia")
+  container_inputs = get_target_outputs(":system_bootfs")
 }
 
 # This rolls the primary ZBI together with a compressed RAMDISK image of
@@ -665,17 +663,19 @@ images += [
 ]
 
 # The installer also wants the zedboot vboot image.
-images += [
-  {
-    deps = [
-      "zedboot:vboot",
-    ]
-    sources = [
-      "$root_out_dir/zedboot.vboot",
-    ]
-    installer = "zedboot.vboot"
-  },
-]
+if (!disable_zedboot) {
+  images += [
+    {
+      deps = [
+        "zedboot:vboot",
+      ]
+      sources = [
+        "$root_out_dir/zedboot.vboot",
+      ]
+      installer = "zedboot.vboot"
+    },
+  ]
+}
 
 if (target_cpu != "arm64") {
   # EFI ESP images.
@@ -800,8 +800,10 @@ group("images") {
   deps = [
     ":ids.txt",
     ":legacy-images",
-    "zedboot",
   ]
+  if (!disable_zedboot) {
+    deps += [ ":zedboot" ]
+  }
   foreach(image, images) {
     deps += image.deps
   }
