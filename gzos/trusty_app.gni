@@ -1,0 +1,57 @@
+# Copyright 2018 Open Trust Group. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+import("//build/package.gni")
+
+template("trusty_app") {
+  app_name = target_name
+
+  config("${app_name}_config") {
+    include_dirs = [ "//garnet/public/lib/gzos/trusty_app" ]
+  }
+
+  source_set("${app_name}_sources") {
+    testonly = true
+
+    visibility = [
+      ":${app_name}_bin",
+    ]
+
+    public_deps = []
+    public_configs = []
+    forward_variables_from(invoker, "*")
+
+    public_deps = [
+      "//garnet/public/lib/gzos/trusty_app",
+    ]
+
+    public_configs += [
+      ":${app_name}_config",
+    ]
+  }
+
+  executable("${app_name}_bin") {
+    output_name = "${app_name}"
+    testonly = true
+
+    deps = [
+      ":${app_name}_sources"
+    ]
+  }
+
+  package(target_name) {
+    deprecated_system_image = true
+    testonly = true
+
+    deps = [
+      ":${app_name}_bin"
+    ]
+
+    binaries = [
+      {
+        name = "${app_name}"
+      },
+    ]
+  }
+}
