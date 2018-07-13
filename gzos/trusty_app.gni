@@ -7,6 +7,9 @@ import("//build/package.gni")
 template("trusty_app") {
   app_name = target_name
 
+  assert(defined(invoker.manifest), "Must define manifest file path")
+  manifest_path = invoker.manifest
+
   config("${app_name}_config") {
     include_dirs = [ "//garnet/public/lib/gzos/trusty_app" ]
   }
@@ -40,6 +43,13 @@ template("trusty_app") {
   package(target_name) {
     deprecated_system_image = true
 
+    resources = [
+      {
+        path = rebase_path(manifest_path)
+        dest = "${app_name}/manifest.json"
+      }
+    ]
+
     deps = [
       ":${app_name}_bin"
     ]
@@ -47,7 +57,7 @@ template("trusty_app") {
     binaries = [
       {
         name = "${app_name}"
-      },
+      }
     ]
   }
 }
