@@ -1,4 +1,4 @@
-# Copyright 2018 Open Trust Group. All rights reserved.
+# Copyright 2018 Open Trust Group
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -9,10 +9,6 @@ template("trusty_app") {
 
   assert(defined(invoker.manifest), "Must define manifest file path")
   manifest_path = invoker.manifest
-
-  config("${app_name}_config") {
-    include_dirs = [ "//garnet/public/lib/gzos/trusty_app" ]
-  }
 
   source_set("${app_name}_sources") {
     visibility = [
@@ -25,10 +21,6 @@ template("trusty_app") {
 
     public_deps = [
       "//garnet/public/lib/gzos/trusty_app",
-    ]
-
-    public_configs += [
-      ":${app_name}_config",
     ]
   }
 
