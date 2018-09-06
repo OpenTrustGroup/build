@@ -26,6 +26,17 @@ from mako.template import Template
 # Packages included in the sysroot.
 SYSROOT_PACKAGES = ['c', 'zircon']
 
+# Prefixes of Zircon headers that should not appear in SDKs.
+NON_SDK_SYSROOT_HEADER_PREFIXES = ['zircon/device']
+# TODO(FIDL-273): remove this allowlist.
+MANDATORY_SDK_HEADERS = [
+    'zircon/device/ioctl.h', # Needed by zircon/device/ramdisk.h
+    'zircon/device/ioctl-wrapper.h', # Needed by zircon/device/ramdisk.h
+    # TODO(ZX-2503): remove this entry.
+    'zircon/device/ramdisk.h', # Needed by fs-management/ramdisk.h
+    'zircon/device/sysinfo.h', # Needed by some external clients
+]
+
 # List of libraries with header files being transitioned from
 # 'include/foo/foo.h' to 'include/lib/foo/foo.h'. During the transition, both
 # the library's 'include/' and 'include/lib' directories are added to the
@@ -247,6 +258,7 @@ class Sysroot(object):
 
     def __init__(self):
         self.files = {}
+        self.sdk_files = {}
 
 
 def generate_sysroot(package, context):
@@ -257,11 +269,19 @@ def generate_sysroot(package, context):
     for name, path in package.get('includes', {}).iteritems():
         (file, _) = extract_file(name, path, context)
         data.files['include/%s' % name] = '//%s' % file
+        in_sdk = True
+        for prefix in NON_SDK_SYSROOT_HEADER_PREFIXES:
+            if name.startswith(prefix) and name not in MANDATORY_SDK_HEADERS:
+                in_sdk = False
+                break
+        if in_sdk:
+            data.sdk_files['include/%s' % name] = '//%s' % file
 
     # Lib.
     for name, path in package.get('lib', {}).iteritems():
         (file, _) = extract_file(name, path, context)
         data.files[name] = '//%s' % file
+        data.sdk_files[name] = '//%s' % file
 
     # Generate the build file.
     build_path = os.path.join(context.out_dir, 'sysroot', 'BUILD.gn')
@@ -382,10 +402,7 @@ def main():
     ]
 
     env = {}
-    if sys.platform == 'darwin':
-        # The Darwin bash does not know the path to its built-in commands in an
-        # empty environment. Thus, we always pass the PATH.
-        env['PATH'] = os.environ['PATH']
+    env['PATH'] = os.environ['PATH']
     if not debug:
         env['QUIET'] = '1'
     subprocess.check_call(make_args, cwd=ZIRCON_ROOT, env=env)

@@ -26,7 +26,11 @@ declare_args() {
   # relative to `get_path_info(entry, "dir") + "/.."`.
   # TODO(mcgrathr): Make Zircon manifests self-relative too and then
   # merge this and toolchain_manifests into generic aux_manifests.
-  zircon_aux_manifests = [ "$zircon_build_abi_dir/bootfs.manifest" ]
+  if (zircon_use_asan) {
+    zircon_aux_manifests = [ "$zircon_build_abi_dir/bootfs.manifest" ]
+  } else {
+    zircon_aux_manifests = [ "$zircon_asan_build_dir/bootfs.manifest" ]
+  }
 
   # Manifest files describing files to go into the `/boot` filesystem.
   # Can be either // source paths or absolute system paths.
@@ -50,6 +54,7 @@ declare_args() {
 #   response_file_contents (required)
 #   data_deps (optional)
 #   deps (optional)
+#   public_deps (optional)
 #   testonly (optional)
 #   visibility (optional)
 #     Same as for any GN `action()` target.
@@ -60,6 +65,7 @@ template("generate_response_file") {
                            [
                              "data_deps",
                              "deps",
+                             "public_deps",
                              "output_name",
                              "response_file_contents",
                              "testonly",
@@ -135,6 +141,7 @@ template("generate_manifest") {
     forward_variables_from(invoker,
                            [
                              "deps",
+                             "public_deps",
                              "sources",
                              "testonly",
                              "visibility",

@@ -22,14 +22,7 @@ template("fidl_rust_library") {
     library_name = invoker.name
   }
 
-  underscore_name = exec_script(
-      "//build/rust/fidl_crate_from_library.py",
-      [
-        "--name",
-        library_name,
-      ],
-      "trim string"
-  )
+  underscore_name = "fidl_" + string_replace(library_name, ".", "_")
 
   fidl_target_gen_dir = get_label_info(":bogus($fidl_toolchain)", "target_gen_dir")
   file_stem = "$fidl_target_gen_dir/${underscore_name}"
@@ -37,12 +30,13 @@ template("fidl_rust_library") {
   rustc_library(rustc_target_name) {
     name = underscore_name
     version = "0.1.0"
+    edition = "2015"
     forward_variables_from(invoker, [ "testonly" ])
     deps = [
       "//garnet/public/lib/fidl/rust/fidl",
       "//garnet/public/rust/crates/fuchsia-async",
       "//garnet/public/rust/crates/fuchsia-zircon",
-      "//third_party/rust-crates/rustc_deps:futures",
+      "//third_party/rust-crates/rustc_deps:futures-preview",
     ]
 
     if (defined(invoker.public_deps)) {

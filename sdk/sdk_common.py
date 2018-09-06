@@ -37,6 +37,7 @@ class File(object):
     def __init__(self, json):
         self.source = json['source']
         self.destination = json['destination']
+        self.is_packaged = json['packaged']
 
     def __str__(self):
         return '{%s <-- %s}' % (self.destination, self.source)
@@ -48,11 +49,14 @@ class Atom(object):
     def __init__(self, json):
         self.json = json
         self.id = AtomId(json['id'])
+        self.identifier = json['identifier']
+        self.metadata = json['meta']
         self.label = json['gn-label']
         self.category = json['category']
         self.deps = map(lambda i: AtomId(i), json['deps'])
         self.package_deps = map(lambda i: AtomId(i), json['package-deps'])
         self.files = [File(f) for f in json['files']]
+        self.new_files = [File(f) for f in json['new-files']]
         self.tags = json['tags']
 
     def __str__(self):

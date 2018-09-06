@@ -29,7 +29,7 @@ source_set("${data.name}") {
     "../${dep}",
     % endfor
     % for dep in sorted(data.fidl_deps):
-    "../../fidl/${dep}",
+    "../../fidl/${dep}:${dep}_c",
     % endfor
   ]
 
@@ -42,16 +42,46 @@ source_set("${data.name}") {
   public_configs = [
     ":${data.name}_config",
   ]
+}
 
-  defines = [
-    "_ALL_SOURCE=1",
-  ]
+file_base = "pkg/${data.name}"
+metadata = {
+  name = "${data.name}"
+  type = "cc_source_library"
+  root = file_base
+  include_dir = "$file_base/include"
+
+  sources = []
+  % for dest, _ in sorted(data.sources.iteritems()):
+  sources += [ "$file_base/${dest}" ]
+  % endfor
+
+  headers = []
+  % for dest, _ in sorted(data.includes.iteritems()):
+  headers += [ "$file_base/include/${dest}" ]
+  % endfor
+
+  deps = []
+  % for dep in sorted(data.deps):
+  deps += [ "${dep}" ]
+  % endfor
+
+  fidl_deps = []
+
+  files = sources + headers
 }
 
 sdk_atom("${data.name}_sdk") {
   domain = "cpp"
   name = "${data.name}"
+  id = "sdk://pkg/${data.name}"
   category = "partner"
+
+  meta = {
+    dest = "$file_base/meta.json"
+    schema = "cc_source_library"
+    value = metadata
+  }
 
   tags = [
     "type:sources",
@@ -68,6 +98,21 @@ sdk_atom("${data.name}_sdk") {
     {
       source = "${source}"
       dest = "${dest}"
+    },
+    % endfor
+  ]
+
+  new_files = [
+    % for dest, source in sorted(data.includes.iteritems()):
+    {
+      source = "${source}"
+      dest = "$file_base/include/${dest}"
+    },
+    % endfor
+    % for dest, source in sorted(data.sources.iteritems()):
+    {
+      source = "${source}"
+      dest = "$file_base/${dest}"
     },
     % endfor
   ]

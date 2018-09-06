@@ -2,9 +2,36 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+declare_args() {
+  # How many symbols to include in the build. This affects the performance of
+  # the build since the symbols are large and dealing with them is slow.
+  #   2 means regular build with symbols.
+  #   1 means minimal symbols, usually enough for backtraces only. Symbols with
+  # internal linkage (static functions or those in anonymous namespaces) may not
+  # appear when using this level.
+  #   0 means no symbols.
+  symbol_level = 2
+
+  if (is_fuchsia) {
+    # Controls whether the compiler emits full stack frames for function calls.
+    # This reduces performance but increases the ability to generate good
+    # stack traces, especially when we have bugs around unwind table generation.
+    # It applies only for Fuchsia targets (see below where it is unset).
+    #
+    # TODO(ZX-2361): Theoretically unwind tables should be good enough so we can
+    # remove this option when the issues are addressed.
+    enable_frame_pointers = is_debug
+  }
+}
+
+# No frame pointers for host compiles.
+if (!is_fuchsia) {
+  enable_frame_pointers = false
+}
+
 config("compiler") {
   asmflags = []
-  cflags = []
+  cflags = [ "-fcolor-diagnostics" ]
   cflags_c = []
   cflags_cc = [ "-fvisibility-inlines-hidden" ]
   cflags_objc = []
@@ -12,10 +39,6 @@ config("compiler") {
   ldflags = []
   defines = []
   configs = []
-
-  if (is_debug) {
-    cflags += [ "-g" ]
-  }
 
   if (current_os == "fuchsia") {
     configs += [ "//build/config/fuchsia:compiler" ]
@@ -30,6 +53,11 @@ config("compiler") {
     } else if (current_os == "mac") {
       configs += [ "//build/config/mac:compiler" ]
     }
+  }
+
+  # Linker on macOS does not support `color-diagnostics`
+  if (current_os != "mac") {
+    ldflags += [ "-Wl,--color-diagnostics" ]
   }
 
   asmflags += cflags
@@ -71,7 +99,6 @@ config("relative_paths") {
 
 config("debug") {
   cflags = [
-    "-g",
     "-Og",
   ]
   ldflags = cflags
@@ -117,6 +144,53 @@ config("default_include_dirs") {
     "//",
     root_gen_dir,
   ]
+}
+
+config("minimal_symbols") {
+  cflags = [ "-gline-tables-only" ]
+  asmflags = cflags
+  ldflags = cflags
+}
+
+config("symbols") {
+  cflags = [ "-g3" ]
+  asmflags = cflags
+  ldflags = cflags
+}
+
+config("no_symbols") {
+  cflags = [ "-g0" ]
+  asmflags = cflags
+  ldflags = cflags
+}
+
+# Default symbols.
+config("default_symbols") {
+  if (symbol_level == 0) {
+    configs = [ ":no_symbols" ]
+  } else if (symbol_level == 1) {
+    configs = [ ":minimal_symbols" ]
+  } else if (symbol_level == 2) {
+    configs = [ ":symbols" ]
+  } else {
+    assert(symbol_level >= 0 && symbol_level <= 2)
+  }
+}
+
+config("default_frame_pointers") {
+  if (enable_frame_pointers) {
+    configs = [ ":frame_pointers" ]
+  } else {
+    configs = [ ":no_frame_pointers" ]
+  }
+}
+
+config("frame_pointers") {
+  cflags = [ "-fno-omit-frame-pointer" ]
+}
+
+config("no_frame_pointers") {
+  cflags = [ "-fomit-frame-pointer" ]
 }
 
 config("default_warnings") {

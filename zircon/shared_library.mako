@@ -93,17 +93,17 @@ if (current_toolchain != shlib_toolchain) {
       ":${data.name}_copy_abi_lib",
       ":${data.name}_copy_impl_lib",
       ":${data.name}_copy_unstripped_lib",
-      % for dep in sorted(data.deps):
-      "../${dep}",
-      % endfor
       % for dep in sorted(data.fidl_deps):
-      "../../fidl/${dep}",
+      "../../fidl/${dep}:${dep}_c",
       % endfor
     ]
 
     public_configs = [
       ":${data.name}_config",
       ":${data.name}_lib_config",
+      % for dep in sorted(data.deps):
+      "../${dep}:${dep}_config",
+      % endfor
     ]
 
     data_deps = [
@@ -113,10 +113,55 @@ if (current_toolchain != shlib_toolchain) {
 
 }  # current_toolchain != shlib_toolchain
 
+file_base = "pkg/${data.name}"
+prebuilt_base = "arch/$target_cpu"
+binaries_content = {
+  link = "$prebuilt_base/lib/${data.lib_name}"
+  debug = "$prebuilt_base/debug/${data.lib_name}"
+}
+% if data.has_impl_prebuilt:
+binaries_content.dist = "$prebuilt_base/dist/${data.lib_name}"
+% endif
+metadata = {
+  name = "${data.name}"
+  type = "cc_prebuilt_library"
+  root = file_base
+  format = "shared"
+  include_dir = "$file_base/include"
+
+  headers = []
+  % if data.with_sdk_headers:
+  % for dest, _ in sorted(data.includes.iteritems()):
+  headers += [ "$file_base/include/${dest}" ]
+  % endfor
+  % endif
+
+  binaries = {}
+  if (target_cpu == "arm64") {
+    binaries.arm64 = binaries_content
+  } else if (target_cpu == "x64") {
+    binaries.x64 = binaries_content
+  } else {
+    assert(false, "Unknown CPU type: %target_cpu")
+  }
+
+  deps = []
+  % for dep in sorted(data.deps):
+  deps += [ "${dep}" ]
+  % endfor
+}
+
 sdk_atom("${data.name}_sdk") {
   domain = "cpp"
   name = "${data.name}"
+  id = "sdk://pkg/${data.name}"
   category = "partner"
+
+  meta = {
+    dest = "$file_base/meta.json"
+    schema = "cc_prebuilt_library"
+    value = metadata
+  }
 
   tags = [
     "type:compiled_shared",
@@ -151,6 +196,31 @@ sdk_atom("${data.name}_sdk") {
     {
       source = "$shared_out_dir/lib.unstripped/${data.lib_name}"
       dest = "debug/${data.lib_name}"
+    },
+  ]
+
+  new_files = [
+    % if data.with_sdk_headers:
+    % for dest, source in sorted(data.includes.iteritems()):
+    {
+      source = "${source}"
+      dest = "$file_base/include/${dest}"
+    },
+    % endfor
+    % endif
+    {
+      source = "$shared_out_dir/${data.lib_name}"
+      dest = "$prebuilt_base/lib/${data.lib_name}"
+    },
+    % if data.has_impl_prebuilt:
+    {
+      source = "$shared_out_dir/${data.lib_name}.impl"
+      dest = "$prebuilt_base/dist/${data.lib_name}"
+    },
+    % endif
+    {
+      source = "$shared_out_dir/lib.unstripped/${data.lib_name}"
+      dest = "$prebuilt_base/debug/${data.lib_name}"
     },
   ]
 

@@ -62,8 +62,17 @@
           "description": "The atom's unique identifier",
           "$ref": "#/definitions/atomId"
         },
+        "identifier": {
+          "description": "The atom's unique identifier",
+          "type": "string",
+          "pattern": "^sdk://([a-z][a-z0-9-_\\.]+)(/([a-z][a-z0-9-_\\.]+))*$"
+        },
         "gn-label": {
           "description": "Label of the GN target which generated the atom",
+          "type": "string"
+        },
+        "meta": {
+          "description": "Path to the atom's metadata file in the SDK",
           "type": "string"
         },
         "category": {
@@ -78,7 +87,14 @@
           ]
         },
         "files": {
-          "description": "The files making up the atom",
+          "description": "The files making up the atom, relative to the atom root -- OBSOLETE, will be replaced by 'new-files' soon",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/atomFile"
+          }
+        },
+        "new-files": {
+          "description": "Paths to files making up the atom, relative to the SDK root",
           "type": "array",
           "items": {
             "$ref": "#/definitions/atomFile"
@@ -123,7 +139,9 @@
         "category",
         "deps",
         "files",
+        "new-files",
         "id",
+        "identifier",
         "tags",
         "gn-label",
         "package-deps"

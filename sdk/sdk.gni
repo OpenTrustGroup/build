@@ -3,7 +3,13 @@
 # found in the LICENSE file.
 
 import("//build/compiled_action.gni")
+import("//build/json/validate_json.gni")
 import("sdk_molecule.gni")
+
+declare_args() {
+  # Whether to build SDK tarballs.
+  build_sdk_archives = false
+}
 
 # A collection of elements to be published in an SDK.
 #
@@ -24,14 +30,6 @@ import("sdk_molecule.gni")
 #     on an official SDK.
 #     Defaults to false.
 #
-#   old_school (optional)
-#     If `export` is true, controls the layout of the produced SDK.
-#     An old-school SDK will essentially be a sysroot containing all the
-#     C/C++ packages.
-#     Note: this is a stop-gap measure to port runtimes to the new sysroot
-#     shape.
-#     Defaults to true.
-#
 #   domains (optional)
 #     If `export` is true, specifies the domains of SDK elements to export.
 #     Only the "cpp" domain is currently supported.
@@ -42,7 +40,11 @@ template("sdk") {
   main_target_name = target_name
   generation_target_name = "${target_name}_molecule"
   copy_target_name = "${target_name}_copy"
-  verification_target_name = "${target_name}_verify"
+  verification_target_name = "${target_name}_manifest_verify"
+  meta_target_name = "${target_name}_meta"
+  verify_meta_target_name = "${target_name}_meta_verify"
+  archive_manifest_target_name = "${target_name}_archive_manifest"
+  archive_target_name = "${target_name}_archive"
 
   if (!is_fuchsia) {
     assert(false, "SDKs can only target Fuchsia")
@@ -73,11 +75,11 @@ template("sdk") {
                            [
                              "domains",
                              "export",
-                             "old_school",
                            ])
 
     category = invoker.category
 
+    # TODO(DX-340): this attribute should not be needed anymore.
     metadata = [
       {
         key = "target-arch"
@@ -114,27 +116,43 @@ template("sdk") {
   }
 
   # Verifies that the manifest is valid.
-  compiled_action(verification_target_name) {
+  validate_json(verification_target_name) {
     forward_variables_from(invoker, [ "testonly" ])
 
-    tool = "//build/tools/json_validator"
+    data = final_manifest_file
 
-    stamp_file = "$target_gen_dir/$target_name.verified"
-    schema_file = "//build/sdk/manifest_schema.json"
+    schema = "//build/sdk/manifest_schema.json"
+
+    deps = [
+      ":$copy_target_name",
+    ]
+  }
+
+  sdk_meta_file = "$target_gen_dir/$sdk_name.sdk_meta.json"
+
+  # Generates a metadata file describing the various parts of the SDK.
+  action(meta_target_name) {
+    forward_variables_from(invoker, [ "testonly" ])
+
+    script = "//build/sdk/generate_meta.py"
 
     inputs = [
       final_manifest_file,
-      schema_file,
     ]
 
     outputs = [
-      stamp_file,
+      sdk_meta_file,
     ]
 
     args = [
-      rebase_path(schema_file),
+      "--manifest",
       rebase_path(final_manifest_file),
-      rebase_path(stamp_file),
+      "--meta",
+      rebase_path(sdk_meta_file),
+      "--target-arch",
+      target_triple,
+      "--host-arch",
+      host_triple,
     ]
 
     deps = [
@@ -142,12 +160,99 @@ template("sdk") {
     ]
   }
 
+  # Verifies that the manifest metadata is valid.
+  validate_json(verify_meta_target_name) {
+    forward_variables_from(invoker, [ "testonly" ])
+
+    data = sdk_meta_file
+
+    schema = "//build/sdk/meta/manifest.json"
+
+    public_deps = [
+      ":$meta_target_name",
+    ]
+  }
+
+  archive_manifest_file = "$target_gen_dir/$sdk_name.archive_manifest"
+
+  # From the manifest file representing the SDK, generates a list of the files
+  # going into the final archive.
+  action(archive_manifest_target_name) {
+    forward_variables_from(invoker, [ "testonly" ])
+
+    script = "//build/sdk/generate_archive_manifest.py"
+
+    sources = [ "//build/sdk/sdk_common.py" ]
+
+    inputs = [
+      final_manifest_file,
+      sdk_meta_file,
+    ]
+
+    outputs = [
+      archive_manifest_file,
+    ]
+
+    args = [
+      "--manifest",
+      rebase_path(final_manifest_file),
+      "--output",
+      rebase_path(archive_manifest_file),
+      "--meta",
+      rebase_path(sdk_meta_file),
+    ]
+
+    deps = [
+      ":$copy_target_name",
+      ":$verify_meta_target_name",
+    ]
+  }
+
+  if (build_sdk_archives) {
+    # Generates the final archive.
+    final_archive = "$root_out_dir/sdk/$sdk_name.tar.gz"
+
+    compiled_action(archive_target_name) {
+      forward_variables_from(invoker, [ "testonly" ])
+
+      tool = "//build/tools/tar_maker"
+
+      inputs = [
+        archive_manifest_file,
+      ]
+
+      outputs = [
+        final_archive,
+      ]
+
+      args = [
+        "-manifest",
+        rebase_path(archive_manifest_file),
+        "-output",
+        rebase_path(final_archive),
+      ]
+
+      deps = [
+        ":$archive_manifest_target_name",
+        ":$copy_target_name",
+      ]
+    }
+  } else {
+    group(archive_target_name) {
+      forward_variables_from(invoker, [ "testonly" ])
+
+      deps = [
+        ":$archive_manifest_target_name",
+      ]
+    }
+  }
+
   group(main_target_name) {
     forward_variables_from(invoker, [ "testonly" ])
 
     deps = [
+      ":$archive_target_name",
       ":$copy_target_name",
-      ":$generation_target_name",
       ":$verification_target_name",
     ]
   }
@@ -186,11 +291,9 @@ template("sdk") {
                rebase_path(depfile),
                "--depname",
                rebase_path(stamp_file, root_build_dir),
+               "--arch",
+               target_cpu,
              ]
-
-      if (defined(invoker.old_school) && invoker.old_school) {
-        args += [ "--old-school" ]
-      }
 
       deps = [
         ":$copy_target_name",
@@ -200,9 +303,6 @@ template("sdk") {
   } else {  # Not exported.
     if (defined(invoker.domains)) {
       assert(false, "A domain list may only be set if export = true.")
-    }
-    if (defined(invoker.old_school)) {
-      assert(false, "Only exported SDKs may be old-school.")
     }
   }
 }

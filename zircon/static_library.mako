@@ -38,7 +38,7 @@ group("${data.name}") {
     "../${dep}",
     % endfor
     % for dep in sorted(data.fidl_deps):
-    "../../fidl/${dep}",
+    "../../fidl/${dep}:${dep}_c",
     % endfor
   ]
 
@@ -47,10 +47,49 @@ group("${data.name}") {
   ]
 }
 
+file_base = "pkg/${data.name}"
+prebuilt_base = "arch/$target_cpu"
+binaries_content = {
+  link = "$prebuilt_base/lib/${data.lib_name}"
+}
+metadata = {
+  name = "${data.name}"
+  type = "cc_prebuilt_library"
+  root = file_base
+  format = "static"
+  include_dir = "$file_base/include"
+
+  headers = []
+  % for dest, _ in sorted(data.includes.iteritems()):
+  headers += [ "$file_base/include/${dest}" ]
+  % endfor
+
+  binaries = {}
+  if (target_cpu == "arm64") {
+    binaries.arm64 = binaries_content
+  } else if (target_cpu == "x64") {
+    binaries.x64 = binaries_content
+  } else {
+    assert(false, "Unknown CPU type: %target_cpu")
+  }
+
+  deps = []
+  % for dep in sorted(data.deps):
+  deps += [ "${dep}" ]
+  % endfor
+}
+
 sdk_atom("${data.name}_sdk") {
   domain = "cpp"
   name = "${data.name}"
+  id = "sdk://pkg/${data.name}"
   category = "partner"
+
+  meta = {
+    dest = "$file_base/meta.json"
+    schema = "cc_prebuilt_library"
+    value = metadata
+  }
 
   tags = [
     "type:compiled_static",
@@ -67,6 +106,19 @@ sdk_atom("${data.name}_sdk") {
     {
       source = _lib
       dest = "lib/${data.lib_name}"
+    },
+  ]
+
+  new_files = [
+    % for dest, source in sorted(data.includes.iteritems()):
+    {
+      source = "${source}"
+      dest = "$file_base/include/${dest}"
+    },
+    % endfor
+    {
+      source = _lib
+      dest = "$prebuilt_base/lib/${data.lib_name}"
     },
   ]
 

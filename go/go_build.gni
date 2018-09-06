@@ -4,42 +4,23 @@
 
 import("//build/config/clang/clang.gni")
 import("//build/config/sysroot.gni")
+import("//build/host.gni")
 import("//build/sdk/sdk_atom.gni")
 
 # A template for an action that builds a Go binary. Users should instead use the
 # go_binary or go_test rules.
-#
-# Every go_build target with any go_dependencies declared has a new GOPATH
-# constructed. The scopes contained within go_dependencies define symlinks that
-# will be added to the GOPATH.
-#
-# Example:
-# go_build("mypackage") {
-#   gopackage = "fuchsia.googlesource.com/mypackage"
-#   go_dependencies = [
-#     {
-#       package = "fuchsia.googlesource.com/mypackage"
-#     },
-#     {
-#       source = "//third_party/golang/crypto"
-#       package = "golang.org/x/crypto"
-#     }
-#   ]
-# }
-#
-# The above go_dependencies declaration is most typical, it creates a GOPATH
-# entry for "fuchsia.googlesource.com/mypackage" that points to the directory
-# containing the caller BUILD.gn. If source is ever omitted, it is assumed to be
-# the directory of the containing action.
-#
-# At minimum there should be a go_dependencies declaration for the package to
-# be built.
 #
 # Parameters
 #
 #   sdk_category (optional)
 #     Publication level of the library in SDKs.
 #     See //build/sdk/sdk_atom.gni.
+#
+#   deps (optional)
+#     List of labels representing go_library targets this target depends on.
+#
+#   non_go_deps (optional)
+#     List of labels this target depends on that are not Go libraries.
 
 template("go_build") {
   assert(defined(invoker.gopackage),
@@ -54,10 +35,9 @@ template("go_build") {
   output_path = "${root_out_dir}/${output_name}"
 
   action(main_target_name) {
-    forward_variables_from(invoker, [ "deps" ])
-
-    if (!defined(deps)) {
-      deps = []
+    deps = []
+    if (defined(invoker.non_go_deps)) {
+      deps += invoker.non_go_deps
     }
 
     use_strip = is_fuchsia
@@ -75,54 +55,63 @@ template("go_build") {
     depfile = "${output_path}.d"
 
     sources = [
-      "//build/go/gen_libraries.py",
+      "//build/go/gen_library_metadata.py",
     ]
 
-    # The same Go toolchain is used for host and target.
-    # It lives in $root_out_dir/goroot for the target's value of root_out_dir.
-    # TODO(dje): Move go toolchain to host root_out_dir. It runs on the host.
-    target_root_out_dir = get_label_info("//third_party/go:go_runtime($target_toolchain)", "root_out_dir")
-    go_root = rebase_path("$target_root_out_dir/goroot")
-
-    deps += [ "//third_party/go:go_runtime" ]
-
-    if (is_fuchsia) {
-      deps += [
-        "//garnet/public/sdk:zircon_sysroot_export",
-        "//zircon/public/lib/fdio",
-      ]
-    }
-
-    go_dependencies = []
-    if (defined(invoker.go_dependencies)) {
-      go_dependencies = invoker.go_dependencies
-    }
-
-    zircon_sysroot = sysroot
-    if (is_fuchsia) {
-      zircon_sysroot = rebase_path("$root_out_dir/sdks/zircon_sysroot/sysroot")
-    }
+    godepfile = "//buildtools/${host_platform}/godepfile"
+    inputs = [ godepfile ]
 
     args = [
+      "--godepfile",
+      rebase_path(godepfile, "", root_build_dir),
       "--fuchsia-root",
       rebase_path("//."),
       "--root-out-dir",
       rebase_path(root_out_dir, root_build_dir),
-      "--zircon-sysroot",
-      zircon_sysroot,
       "--depfile",
       rebase_path(depfile),
       "--current-cpu",
       current_cpu,
       "--current-os",
       current_os,
-      "--go-root",
-      go_root,
       "--binname",
       output_name,
       "--toolchain-prefix",
       rebase_path(clang_prefix, "", root_build_dir),
+      "--shared-libs-root",
+      rebase_path(
+          get_label_info("//default($shlib_toolchain)", "root_out_dir")),
     ]
+
+    if (is_fuchsia) {
+      deps += [ "//third_party/go:go_runtime" ]
+
+      deps += [
+        "//garnet/public/sdk:zircon_sysroot_export",
+        "//zircon/public/lib/fdio",
+      ]
+
+      # GN provides no way to propagate include paths like this, so, this is brittle:
+      fdio_include = rebase_path("//zircon/system/ulib/fdio/include")
+
+      zircon_sysroot = rebase_path("$root_out_dir/sdks/zircon_sysroot/arch/$target_cpu/sysroot")
+
+      args += [
+        "--zircon-sysroot",
+        zircon_sysroot,
+        "--fdio-include",
+        fdio_include,
+        "--go-root",
+        rebase_path("$host_tools_dir/goroot"),
+      ]
+
+    } else {
+      args += [
+        "--go-root",
+        rebase_path("//buildtools/${host_platform}/go"),
+      ]
+
+    }
 
     if (use_strip) {
       args += [
@@ -135,25 +124,14 @@ template("go_build") {
       args += [ "--is-test=true" ]
     }
 
-    if (defined(invoker.extra_dependencies)) {
-      deps += invoker.extra_dependencies
+    if (defined(invoker.deps)) {
+      deps += invoker.deps
       args += [ "--go-dep-files" ]
-      foreach(dep, invoker.extra_dependencies) {
+      foreach(dep, invoker.deps) {
         gen_dir = get_label_info(dep, "target_gen_dir")
         name = get_label_info(dep, "name")
         args += [ rebase_path("$gen_dir/$name.go_deps") ]
       }
-    }
-
-    foreach(dep, go_dependencies) {
-      if (!defined(dep.source)) {
-        dep.source = "."
-      }
-      source = dep.source
-      args += [
-        "--go-dependency",
-        dep.package + "=" + rebase_path(source),
-      ]
     }
 
     args += [
@@ -162,24 +140,45 @@ template("go_build") {
     ]
   }
 
-  if (defined(invoker.sdk_category) && invoker.sdk_category != "excluded") {
+  # Allow host binaries to be published in SDKs.
+  if (defined(invoker.sdk_category) && invoker.sdk_category != "excluded" &&
+      !is_fuchsia && (!defined(invoker.test) || !invoker.test)) {
+    file_base = "tools/$output_name"
+
     sdk_atom("${target_name}_sdk") {
       domain = "exe"
       name = output_name
+      id = "sdk://tools/$output_name"
 
       category = invoker.sdk_category
 
-      if (is_fuchsia) {
-        tags = [ "arch:target" ]
-      } else {
-        tags = [ "arch:host" ]
+      meta = {
+        dest = "$file_base-meta.json"
+        schema = "host_tool"
+        value = {
+          type = "host_tool"
+          name = output_name
+          root = "tools"
+          files = [
+            file_base,
+          ]
+        }
       }
+
+      tags = [ "arch:host" ]
 
       files = [
         {
           source = output_path
           dest = output_name
         },
+      ]
+
+      new_files = [
+        {
+          source = output_path
+          dest = file_base
+        }
       ]
 
       non_sdk_deps = [ ":$main_target_name" ]

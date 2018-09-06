@@ -15,10 +15,26 @@ copy("${data.name}") {
   ]
 }
 
+file_base = "tools/${data.name}"
+
 sdk_atom("${data.name}_sdk") {
   domain = "exe"
   name = "${data.name}"
+  id = "sdk://tools/${data.name}"
   category = "partner"
+
+  meta = {
+    dest = "$file_base-meta.json"
+    schema = "host_tool"
+    value = {
+      type = "host_tool"
+      name = "${data.name}"
+      root = "tools"
+      files = [
+        file_base,
+      ]
+    }
+  }
 
   tags = [ "arch:host" ]
 
@@ -27,5 +43,12 @@ sdk_atom("${data.name}_sdk") {
       source = "${data.executable}"
       dest = "${data.name}"
     },
+  ]
+
+  new_files = [
+    {
+      source = "${data.executable}"
+      dest = file_base
+    }
   ]
 }

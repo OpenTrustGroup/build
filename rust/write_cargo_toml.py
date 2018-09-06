@@ -14,13 +14,26 @@ ROOT_PATH = os.path.abspath(__file__ + "/../../..")
 sys.path += [os.path.join(ROOT_PATH, "third_party", "pytoml")]
 import pytoml
 
+# List of packages that are part of the third-party build
+# that live in-tree. In order to unify the two packages in builds
+# that use the output cargo.tomls, we use `= "*"` as the version
+# for these libraries, causing them to resolve via the patch section.
+IN_TREE_THIRD_PARTY_PACKAGES = [
+    "fuchsia-zircon",
+    "fuchsia-zircon-sys",
+]
+
 CARGO_TOML_CONTENTS = '''\
 # Copyright %(year)s The Fuchsia Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
+
+cargo-features = ["edition"]
+
 [package]
 name = "%(package_name)s"
 version = "%(version)s"
+edition = "%(edition)s"
 license = "BSD-3-Clause"
 authors = ["rust-fuchsia@fuchsia.com"]
 description = "Rust crate for Fuchsia OS"
@@ -47,6 +60,9 @@ def main():
                         required=True)
     parser.add_argument("--version",
                         help="Version of crate",
+                        required=True)
+    parser.add_argument("--edition",
+                        help="Edition of rust to use when compiling the crate",
                         required=True)
     parser.add_argument("--out-dir",
                         help="Path to directory where Cargo.toml should be written",
@@ -82,16 +98,23 @@ def main():
                 crate_data = third_party_json["crates"][crate]
                 deps[crate] = crate_data["cargo_dependency_toml"]
             else:
-                deps[dep_data["package_name"]] = {
-                    "path": dep_data["cargo_toml_dir"],
-                    "version": dep_data["version"],
-                }
+                package_name = dep_data["package_name"]
+                if package_name in IN_TREE_THIRD_PARTY_PACKAGES:
+                    deps[package_name] = {
+                        "version": "*",
+                    }
+                else:
+                    deps[package_name] = {
+                        "path": dep_data["cargo_toml_dir"],
+                        "version": dep_data["version"],
+                    }
 
     with open(cargo_toml_path, "w") as file:
         file.write(CARGO_TOML_CONTENTS % {
             "package_name": args.package_name,
             "crate_name": args.crate_name,
             "version": args.version,
+            "edition": args.edition,
             "deps": deps,
             "year": cur_year(),
             "bin_or_lib": "[[bin]]" if args.crate_type == "bin" else "[lib]",

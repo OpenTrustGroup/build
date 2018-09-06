@@ -2,7 +2,22 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//build/compiled_action.gni")
+import("//build/json/validate_json.gni")
+
 # Defines an SDK element.
+#
+# Outputs
+#
+#   $target_gen_dir/$target_name.sdk
+#     A manifest describing what files pertain to the atom and which other atoms
+#     are required by this atom.
+#     TODO(DX-340): mention that this file is now purely internal to the build.
+#
+#   $target_gen_dir/$target_name.meta.json
+#     A metadata file describing the atom.
+#     This file is included in the final SDK and used to e.g. drive the
+#     inclusion of the atom in a different build system.
 #
 # Parameters
 #
@@ -10,20 +25,29 @@
 #     Name of the domain this element too.
 #     Domains regroup elements of similar nature. Language-based domains are
 #     most common.
+#     TODO(DX-340): remove me.
 #
 #   name (optional)
 #     Name of the element.
 #     Must be unique within the given domain.
+#     TODO(DX-340): remove me.
 #
 #   name_file (optional)
 #     Path to a file containing the name of the element.
 #     This should be used when the element's name requires some computation in
 #     its own build target.
+#     TODO(DX-340): remove me.
 #
 #     NOTE: Exactly one of `name` or `name_file` must be set.
 #
+#   id
+#     Identifier of this element within SDKs.
+#     The identifier should represent the canonical base path of the element
+#     within SDKs according to the standard layout (https://fuchsia.googlesource.com/docs/+/master/development/sdk/layout.md).
+#     For an element at $ROOT/pkg/foo, the id should be "sdk://pkg/foo".
+#
 #   category
-#     Describes the availability of the atom.
+#     Describes the availability of the element.
 #     Possible values, from most restrictive to least restrictive:
 #       - excluded     : the atom may not be included in SDKs;
 #       - experimental : the atom is available with no quality guarantee;
@@ -31,21 +55,21 @@
 #       - partner      : the atom may be used by select partners;
 #       - public       : the atom may be included in published SDKs.
 #
-#   files (optional)
+#   meta
+#     Scope describing the element's metadata file.
+#     See the "Metadata scope" section for how to populate this attribute.
+#
+#   files
+#     List of scopes describing the contents of this element.
+#     See the "File scopes" section for how to describe files - note that for
+#     this attribute, "dest" must be specified relatively to the element's root
+#     in the SDK, not to the SDK root.
+#     This is a legacy attribute which will soon be replaced with new_files.
+#
+#   new_files (optional)
 #     List of scopes describing the contents of this element.
 #     See the "File scopes" section for how to describe files.
-#     At least one of "files" and "file_mappings" must be set.
-#
-#   file_manifest (optional)
-#     File containing a description of the files contributing to this element.
-#     Lines in this file should be formatted as "prefix:destination=source". See
-#     the next section for expected values of "source" and "destination"; note
-#     that sources in a manifest file must be passed as absolute paths. "prefix"
-#     is either "packaged" for files which need to be added to Fuchsia packages,
-#     or "internal" for files that are not.
-#     This parameter is useful to specify files that are only known at build
-#     time.
-#     At least one of "files" and "file_mappings" must be set.
+#     TODO(DX-340): rename to "files"
 #
 #   source_dir (optional)
 #     If set, path to the base directory of the sources.
@@ -74,12 +98,31 @@
 #     This file must be using the JSON format; the top-level object must be a
 #     map whose values are strings.
 #
-#   manifest_file (optional)
-#     Path to the manifest to generate.
+# Metadata scope
+#
+# This scope describes a metadata file to be added to the SDK element. Its
+# supported attributes are:
+#
+#   source (optional)
+#     Path to the metadata file.
+#
+#   value (optional)
+#     Scope representing the metadata contents.
+#
+#     NOTE: Exactly one of `source` or `value` must be set.
+#
+#   dest (required)
+#     Path to the metadata file in the SDK, relatively to the SDK root
+#
+#   schema (required)
+#     Name of the schema for this file, ignoring the extension.
+#     Metadata files are hosted under //build/sdk/meta.
+#     If the metadata file conforms to //build/sdk/meta/foo.json, the
+#     present attribute should have a value of "foo".
 #
 # File scopes
 #
-# Each scope describe a file to be added to the SDK element. The supported
+# Each scope describes a file to be added to the SDK element. The supported
 # attributes are:
 #
 #   source (required)
@@ -87,7 +130,7 @@
 #     This path may be absolute or relative to the target's directory.
 #
 #   dest (optional)
-#     Destination path of the file relative to the element's base directory in
+#     Destination path of the file relative to the SDK root.
 #     the SDK.
 #     This attribute is required unless "source" points to a file located under
 #     the target's source directory, in which case the relative path of that
@@ -105,6 +148,11 @@ template("sdk_atom") {
 
   assert(defined(invoker.category), "Must define an SDK category")
   category = invoker.category
+
+  assert(defined(invoker.id), "Must define an SDK ID")
+
+  assert(defined(invoker.meta), "Must specify some metadata")
+  meta = invoker.meta
 
   if (defined(invoker.name)) {
     name_args = [
@@ -145,25 +193,33 @@ template("sdk_atom") {
     }
   }
 
-  assert(defined(invoker.files) || defined(invoker.file_manifest),
-         "At least one of 'files' and 'file_manifest' must be defined")
+  assert(defined(invoker.files), "An atom must specify some files")
+  assert(defined(invoker.new_files), "An atom must specify some files")
   file_mappings = []
   file_inputs = []
-  if (defined(invoker.files)) {
-    foreach(file, invoker.files) {
-      assert(defined(file.source), "File $file does not specify a source.")
-      file_inputs += [ file.source ]
-      source = rebase_path(file.source)
-      destination = ""
-      if (defined(file.dest)) {
-        destination = file.dest
-      }
-      prefix = "internal"
-      if (defined(file.packaged)) {
-        prefix = "packaged"
-      }
-      file_mappings += [ "$prefix:$destination=$source" ]
+  all_files = invoker.files
+  foreach(file, all_files) {
+    assert(defined(file.source), "File $file does not specify a source.")
+    file_inputs += [ file.source ]
+    source = rebase_path(file.source)
+    destination = ""
+    if (defined(file.dest)) {
+      destination = file.dest
     }
+    prefix = "internal"
+    if (defined(file.packaged)) {
+      prefix = "packaged"
+    }
+    file_mappings += [ "$prefix:$destination=$source" ]
+  }
+
+  new_file_mappings = []
+  foreach(file, invoker.new_files) {
+    assert(defined(file.source), "File $file does not specify a source.")
+    assert(defined(file.dest), "File $file does not specify a destination.")
+    file_inputs += [ file.source ]
+    source = rebase_path(file.source)
+    new_file_mappings += [ "${file.dest}=${source}" ]
   }
 
   source_dir = "."
@@ -176,21 +232,62 @@ template("sdk_atom") {
     tags = invoker.tags
   }
 
-  full_label = get_label_info(":$target_name", "label_with_toolchain")
+  meta_target_name = "${target_name}_meta"
+  meta_content = invoker.meta
+  meta_file = "$target_gen_dir/$target_name.meta.json"
+
+  if (defined(meta_content.value)) {
+    # Directly write the value into a file in the output directory.
+    write_file(meta_file, meta_content.value, "json")
+    meta_deps = gn_deps
+  } else {
+    meta_copy_target_name = "${target_name}_meta_copy"
+    assert(defined(meta_content.source), "Meta scope needs a source or value")
+    # Copy the file to a canonical location for access by other rules.
+    # TODO(DX-340): instead, make sure that all atoms generate their metadata
+    # file in the right location.
+    copy(meta_copy_target_name) {
+      sources = [
+        meta_content.source,
+      ]
+
+      outputs = [
+        meta_file,
+      ]
+
+      deps = gn_deps
+    }
+
+    meta_deps = [ ":$meta_copy_target_name" ]
+  }
+
+  # Verify that the metadata complies with the specified schema.
+  validate_json(meta_target_name) {
+    forward_variables_from(invoker, [ "testonly" ])
+    data = meta_file
+    schema = "//build/sdk/meta/${meta_content.schema}.json"
+    sources = [
+      # This file is imported by all schemas.
+      "//build/sdk/meta/common.json",
+    ]
+    public_deps = meta_deps
+  }
+
+  # Add the metadata file to the set of files to include in SDKs.
+  meta_source = rebase_path(meta_file)
+  new_file_mappings += [ "${meta.dest}=${meta_source}" ]
 
   # Builds a manifest representing this element.
   action(target_name) {
     forward_variables_from(invoker, [ "testonly" ])
 
-    if (defined(invoker.manifest_file)) {
-      manifest = invoker.manifest_file
-    } else {
-      manifest = "$target_gen_dir/$target_name.sdk"
-    }
+    manifest = "$target_gen_dir/$target_name.sdk"
 
     script = "//build/sdk/create_atom_manifest.py"
 
-    deps = gn_deps
+    public_deps = gn_deps + [
+      ":$meta_target_name",
+    ]
 
     inputs = dep_manifests + file_inputs + [
                # Imported by the action's script.
@@ -202,6 +299,8 @@ template("sdk_atom") {
     ]
 
     args = name_args + [
+             "--id",
+             invoker.id,
              "--domain",
              domain_name,
              "--out",
@@ -209,12 +308,13 @@ template("sdk_atom") {
              "--base",
              rebase_path(source_dir),
              "--gn-label",
-             full_label,
+             get_label_info(":$target_name", "label_with_toolchain"),
              "--category",
              category,
              "--deps",
            ] + dep_manifests + [ "--package-deps" ] + package_dep_manifests +
-           [ "--files" ] + file_mappings + [ "--tags" ] + tags
+           [ "--files" ] + file_mappings + [ "--tags" ] + tags +
+           [ "--new-files" ] + new_file_mappings
     if (defined(invoker.tags_file)) {
       args += [
         "--tags-file",
@@ -222,13 +322,9 @@ template("sdk_atom") {
       ]
     }
 
-    if (defined(invoker.file_manifest)) {
-      inputs += [ invoker.file_manifest ]
-
-      args += [
-        "--file-manifest",
-        rebase_path(invoker.file_manifest),
-      ]
-    }
+    args += [
+      "--meta",
+      meta.dest,
+    ]
   }
 }

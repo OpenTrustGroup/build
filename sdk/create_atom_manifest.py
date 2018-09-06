@@ -13,6 +13,9 @@ from sdk_common import Atom, AtomId, detect_category_violations, detect_collisio
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--id',
+                        help='The atom\'s identifier',
+                        required=True)
     parser.add_argument('--domain',
                         help='Name of the domain the element belongs to',
                         required=True)
@@ -35,10 +38,14 @@ def main():
                         nargs='*')
     parser.add_argument('--files',
                         help='A source=destination mapping',
-                        nargs='*')
-    parser.add_argument('--file-manifest',
-                        help='A file containing source=destination mappings',
-                        required=False)
+                        nargs='+')
+    # TODO(DX-340): merge new-files and files. The former is needed to
+    # transition to destination paths relative to the SDK root as opposed to
+    # the atom root.
+    parser.add_argument('--new-files',
+                        help='Same as files, but new',
+                        nargs="*",
+                        default=[])
     parser.add_argument('--tags',
                         help='List of tags for the included elements',
                         nargs='*')
@@ -51,6 +58,10 @@ def main():
     parser.add_argument('--category',
                         help='Publication level',
                         required=True)
+    parser.add_argument('--meta',
+                        help="Path to the atom's metadata file in the SDK",
+                        default='',
+                        required=False)
     args = parser.parse_args()
 
     if args.name:
@@ -69,12 +80,7 @@ def main():
     files = []
     has_packaged_files = False
     base = os.path.realpath(args.base)
-    mappings = args.files
-    if args.file_manifest:
-        with open(args.file_manifest, 'r') as manifest_file:
-            additional_mappings = [l.strip() for l in manifest_file.readlines()]
-            mappings.extend(additional_mappings)
-    for mapping in mappings:
+    for mapping in args.files:
         mode, pair = mapping.split(':', 1)
         is_packaged = (mode == 'packaged')
         destination, source = pair.split('=', 1)
@@ -99,6 +105,17 @@ def main():
         })
         has_packaged_files = has_packaged_files or is_packaged
 
+    new_files = []
+    for mapping in args.new_files:
+        destination, source = mapping.split('=', 1)
+        new_files.append({
+            'source': source,
+            'destination': destination,
+            # TODO(DX-340): remove this attribute as the presence of atom
+            # metadata in SDKs makes it obsolete.
+            'packaged': False,
+        })
+
     id = {
         'domain': args.domain,
         'name': name,
@@ -120,12 +137,16 @@ def main():
 
     all_atoms.update([Atom({
         'id': id,
+        # TODO(DX-340): rename this to "id" once domain/name are gone.
+        'identifier': args.id,
+        'meta': args.meta,
         'gn-label': args.gn_label,
         'category': args.category,
         'tags': tags,
         'deps': map(lambda i: i.json, sorted(list(deps))),
         'package-deps': map(lambda i: i.json, sorted(list(all_package_deps))),
         'files': files,
+        'new-files':new_files,
     })])
     if detect_collisions(all_atoms):
         print('Name collisions detected!')

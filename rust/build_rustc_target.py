@@ -63,6 +63,10 @@ def main():
     parser.add_argument("--version",
                         help="Semver version of the crate being built",
                         required=True)
+    parser.add_argument("--edition",
+                        help="Edition of rust to use when compiling the crate",
+                        required=True,
+                        choices=["2015", "2018"])
     parser.add_argument("--opt-level",
                         help="Optimization level",
                         required=True,
@@ -115,6 +119,9 @@ def main():
                         action="append",
                         help="Path to metadata from a crate dependency",
                         required=False)
+    parser.add_argument("--mmacosx-version-min",
+                        help="Select macosx framework version",
+                        required=False)
 
     parser.add_argument
     args = parser.parse_args()
@@ -124,7 +131,8 @@ def main():
     env["CXX"] = os.path.join(args.clang_prefix, "clang++")
     env["AR"] = os.path.join(args.clang_prefix, "llvm-ar")
     env["RANLIB"] = os.path.join(args.clang_prefix, "llvm-ranlib")
-    env["PATH"] = "%s:%s" % (env["PATH"], args.cmake_dir)
+    if args.cmake_dir:
+        env["PATH"] = "%s:%s" % (env["PATH"], args.cmake_dir)
     env["RUST_BACKTRACE"] = "1"
 
     create_base_directory(args.output_file)
@@ -132,6 +140,7 @@ def main():
     call_args = [
         args.rustc,
         args.crate_root,
+        "--edition=%s" % args.edition,
         "--crate-type=%s" % args.crate_type,
         "--crate-name=%s" % args.crate_name,
         "--target=%s" % args.target,
@@ -142,6 +151,10 @@ def main():
         "-Lnative=%s" % args.shared_libs_root,
         "--color=always",
     ]
+    if args.mmacosx_version_min:
+        call_args += [
+            "-Clink-arg=-mmacosx-version-min=%s" % args.mmacosx_version_min,
+        ]
 
     if args.lto:
         call_args += ["-Clto=%s" % args.lto]

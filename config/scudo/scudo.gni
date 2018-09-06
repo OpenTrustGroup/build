@@ -5,7 +5,7 @@
 declare_args() {
   # Enable the [Scudo](https://llvm.org/docs/ScudoHardenedAllocator.html)
   # memory allocator.
-  use_scudo = false
+  use_scudo = true
 
   # Default [Scudo](https://llvm.org/docs/ScudoHardenedAllocator.html)
   # options (before the `SCUDO_OPTIONS` environment variable is read at
@@ -20,5 +20,6 @@ declare_args() {
                                        # is resolved
     "DeleteSizeMismatch=false",        # TODO(flowerhack) re-enable when US-495
                                        # is resolved
+    "allocator_may_return_null=true",
   ]
 }
