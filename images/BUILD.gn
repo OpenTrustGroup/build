@@ -867,7 +867,6 @@ group("images") {
   deps = [
     ":ids.txt",
     ":default-legacy-images",
-    "zedboot",
   ]
   if (!disable_zedboot) {
     deps += [ ":zedboot" ]

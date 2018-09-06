@@ -4,7 +4,7 @@
     <project name="build"
              path="build"
              remote="https://review.gerrithub.io/OpenTrustGroup/build"
-             remotebranch="gzos"
+             remotebranch="gzos_dev"
              gerrithost="https://review.gerrithub.io"/>
   </projects>
   <hooks>
