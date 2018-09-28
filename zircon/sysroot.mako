@@ -29,20 +29,45 @@ group("sysroot") {
 
 file_base = "arch/$target_cpu/sysroot"
 
+version_content = {
+  root = file_base
+
+  include_dir = "$file_base/include"
+  headers = []
+  % for header in sorted(data.headers):
+  headers += [ "$file_base/${header}" ]
+  % endfor
+
+  link_libs = []
+  % for lib in sorted(data.link_libs):
+  link_libs += [ "$file_base/${lib}" ]
+  % endfor
+
+  dist_libs = []
+  % for lib in sorted(data.dist_libs):
+  dist_libs += [ "$file_base/${lib}" ]
+  % endfor
+
+  debug_libs = []
+  % for lib in sorted(data.debug_libs):
+  debug_libs += [ "$file_base/${lib}" ]
+  % endfor
+}
 metadata = {
   type = "sysroot"
   name = "sysroot"
   root = "pkg/sysroot"
-  files = [
-    % for path, _ in sorted(data.sdk_files.iteritems()):
-    "$file_base/${path}",
-    % endfor
-  ]
+  versions = {}
+  if (target_cpu == "arm64") {
+    versions.arm64 = version_content
+  } else if (target_cpu == "x64") {
+    versions.x64 = version_content
+  } else {
+    assert(false, "Unknown CPU type: %target_cpu")
+  }
 }
 
 sdk_atom("sysroot_sdk") {
-  domain = "cpp"
-  name = "system"
   id = "sdk://pkg/sysroot"
   category = "partner"
 
@@ -52,23 +77,7 @@ sdk_atom("sysroot_sdk") {
     value = metadata
   }
 
-  tags = [
-    "type:sysroot",
-  ]
-
   files = [
-    % for path, file in sorted(data.sdk_files.iteritems()):
-    {
-      source = "${file}"
-      dest = "${path}"
-      % if path.startswith("dist/"):
-      packaged = true
-      % endif
-    },
-    % endfor
-  ]
-
-  new_files = [
     % for path, file in sorted(data.sdk_files.iteritems()):
     {
       source = "${file}"

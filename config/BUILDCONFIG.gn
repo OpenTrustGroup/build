@@ -215,12 +215,15 @@ if (is_fuchsia) {
     # target in the -shared toolchain.
     template("shared_library") {
       group(target_name) {
-        public_deps = [ ":$target_name(${current_toolchain}-shared)" ]
+        public_deps = [
+          ":$target_name(${current_toolchain}-shared)",
+        ]
         forward_variables_from(invoker,
                                [
                                  "testonly",
                                  "visibility",
                                ])
+
         # Mark all variables as not needed to suppress errors for unused
         # variables.  The other variables normally passed to shared_library
         # are actually used by the shared_library instantiation in the
@@ -266,6 +269,10 @@ _asan_variant = {
       # builds will catch the real undefined reference bugs.
       remove_shared_configs = [ "//build/config:symbol_no_undefined" ]
     }
+  }
+  toolchain_args = {
+    # -fsanitize=scudo is incompatible with -fsanitize=address.
+    use_scudo = false
   }
 }
 
@@ -356,11 +363,28 @@ declare_args() {
       configs += [ "//build/config/sanitizers:sancov" ]
     },
     {
-      forward_variables_from(_asan_variant, "*")
       name = "asan_no_detect_leaks"
+      forward_variables_from(_asan_variant, "*", [ "toolchain_args" ])
       toolchain_args = {
+        forward_variables_from(_asan_variant.toolchain_args, "*")
         asan_default_options = "detect_leaks=0"
       }
+    },
+
+    # Fuzzer variants for various sanitizers,  -fsanitize=fuzzer results
+    # in undefined symbols in shared objects that are satisfied in the final,
+    # statically linked fuzzer.
+    {
+      forward_variables_from(_asan_variant, "*")
+      configs += [ "//build/config/sanitizers:fuzzer" ]
+      remove_shared_configs = [ "//build/config:symbol_no_undefined" ]
+    },
+    {
+      configs = [
+        "//build/config/sanitizers:ubsan",
+        "//build/config/sanitizers:fuzzer",
+      ]
+      remove_shared_configs = [ "//build/config:symbol_no_undefined" ]
     },
   ]
 
@@ -432,6 +456,23 @@ declare_args() {
         {
           variant = "asan"
           host = true
+        },
+      ]
+    },
+    # TODO(TC-241): Remove this when TC-241 is fixed.  For now, don't
+    # apply ASan to drivers because all drivers (and nothing else)
+    # use -static-libstdc++ and so hit the TC-241 problem.
+    {
+      name = "asan"
+      select_variant = []
+      select_variant = [
+        {
+          target_type = [ "driver_module" ]
+          variant = false
+        },
+        {
+          variant = "asan"
+          host = false
         },
       ]
     },

@@ -12,6 +12,7 @@ import("//build/config/fuchsia/zircon.gni")
 import("//build/gn/packages.gni")
 import("//build/images/boot.gni")
 import("//build/images/crashpad.gni")
+import("//build/images/custom_signing.gni")
 import("//build/images/manifest.gni")
 import("//build/package.gni")
 import("//build/sdk/sdk_atom.gni")
@@ -86,6 +87,48 @@ if (zircon_boot_groups == "all") {
 #     [string] Put this image into the update manifest under this name.
 #
 images = []
+
+# Write a JSON metadata file about the packages in the build.
+_packages_json = {
+  _all = []
+  monolith = []
+  foreach(pkg, monolith_packages) {
+    monolith += [ get_label_info(pkg, "name") ]
+    _all += [ pkg ]
+    _all -= [ pkg ]
+    _all += [ pkg ]
+  }
+  preinstall = []
+  foreach(pkg, preinstall_packages) {
+    preinstall += [ get_label_info(pkg, "name") ]
+    _all += [ pkg ]
+    _all -= [ pkg ]
+    _all += [ pkg ]
+  }
+  available = []
+  foreach(pkg, available_packages) {
+    available += [ get_label_info(pkg, "name") ]
+    _all += [ pkg ]
+    _all -= [ pkg ]
+    _all += [ pkg ]
+  }
+  packages = []
+  foreach(pkg, _all) {
+    packages += [
+      {
+        dir = get_label_info(pkg, "dir")
+        name = get_label_info(pkg, "name")
+        build_dir =
+            rebase_path(get_label_info(pkg, "target_out_dir"), root_build_dir)
+      },
+    ]
+  }
+}
+write_file("$root_build_dir/packages.json",
+           {
+             forward_variables_from(_packages_json, "*", [ "_all" ])
+           },
+           "json")
 
 # TODO(mcgrathr): Temporary until scripts and recipes get updated.
 legacy_images_dir = "$root_out_dir/images"
@@ -314,6 +357,12 @@ declare_args() {
   # with `sources` and `outputs` in the style of a copy() target:
   # `outputs[0]` is used as `TARGET` (see `gn help source_expansion`).
   bootfs_extra = []
+
+  # List of kernel images to include in the update (OTA) package.
+  # If no list is provided, all built kernels are included. The names in the
+  # list are strings that must match the filename to be included in the update
+  # package.
+  update_kernels = []
 }
 
 images += [
@@ -327,6 +376,7 @@ images += [
       name = "qemu-kernel"
       type = "kernel"
     }
+    sdk = "qemu-kernel.bin"
     deps = []
     if (current_cpu == "arm64") {
       sources = [
@@ -427,7 +477,7 @@ zbi("fuchsia") {
     ":system_image.manifest",
   ]
   inputs = [
-    "${zircon_build_dir}/zircon.bin",
+    "${zircon_build_dir}/kernel.zbi",
     boot_manifest,
   ]
   manifest = [
@@ -447,7 +497,7 @@ images += [
     deps = [
       ":fuchsia",
     ]
-    sdk = "bootdata-blob.bin"
+    sdk = "fuchsia.zbi"
     updater = "zbi"
     json = {
       name = "zircon-a"
@@ -468,6 +518,31 @@ images += [
   },
 ]
 
+if (custom_signing_script != "") {
+  custom_signed_zbi("signed") {
+    output_name = "fuchsia.zbi"
+    testonly = true
+    deps = [":fuchsia"]
+    zbi = get_target_outputs(":fuchsia")
+  }
+  images += [
+    {
+      deps = [
+        ":signed",
+      ]
+      sdk = "fuchsia.zbi.signed"
+      updater = "zbi.signed"
+      json = {
+        name = "zircon-a.signed"
+        type = "zbi.signed"
+      }
+      public = [
+        "IMAGE_ZIRCONA_SIGNEDZBI"
+      ]
+    }
+  ]
+}
+
 ###
 ### Complete images for booting and installing the whole system.
 ###
@@ -484,7 +559,14 @@ declare_args() {
   # that is too small will result in build failure.
   fvm_image_size = ""
 
-  # Build boot images that prefer Zedboot over local boot.
+  # The size of the FVM partition images "slice size". The FVM slice size is a
+  # minimum size of a particular chunk of a partition that is stored within
+  # FVM. A very small slice size may lead to decreased throughput. A very large
+  # slice size may lead to wasted space. The selected default size of 8mb is
+  # selected for conservation of space, rather than performance.
+  fvm_slice_size = "8388608"
+
+  # Build boot images that prefer Zedboot over local boot (only for EFI).
   always_zedboot = false
 }
 
@@ -506,13 +588,15 @@ template("generate_fvm") {
   }
 }
 
-fvm_create_args = [ "create" ]
+fvm_slice_args = [ "--slice", fvm_slice_size ]
+
+fvm_create_args = [ "create" ] + fvm_slice_args
 
 fvm_sparse_args = [
   "sparse",
   "--compress",
   "lz4",
-]
+] + fvm_slice_args
 
 # fvm.blk creates a non-sparse FVM partition image containing the blob
 # partition produced by blob.blk.  fvm.blk is primarily invoked and used
@@ -550,38 +634,8 @@ images += [
   },
 ]
 
-# fvm.sparse.blk creates a sparse FVM partition image containing the blob
-# partition produced by blob.blk.  fvm.sparse.blk is primarily invoked and
-# used by the paver boot, via `fx boot-paver`.
-generate_fvm("fvm.sparse.blk") {
-  testonly = true
-  output_name = "$target_out_dir/fvm.sparse.blk"
-  deps = [
-    ":blob.blk",
-  ]
-  args = fvm_sparse_args + [ "--blob" ]
-}
-images += [
-  {
-    deps = [
-      ":fvm.sparse.blk",
-    ]
-    json = {
-      name = "storage-sparse"
-      type = "blk"
-    }
-    installer = "fvm.sparse.blk"
-    sdk = "fvm.sparse.blk"
-    public = [
-      "IMAGE_FVM_SPARSE",
-    ]
-    legacy_copy = "fvm.sparse.blk"
-    legacy_copy_dir = legacy_images_dir
-  },
-]
-
 # data.blk creates an empty but initialized minfs data partition.
-# The partition is included in fvm.data.sparse.blk.
+# The partition is included in fvm.sparse.blk.
 zircon_tool_action("data.blk") {
   tool = "minfs"
   data_image_path = "$target_out_dir/$target_name"
@@ -604,32 +658,50 @@ images += [
   },
 ]
 
-# fmv.data.sparse.blk is an FVM image containing only data.blk. It is
-# used to pave new data partitions to a device.
-generate_fvm("fvm.data.sparse.blk") {
-  output_name = "$target_out_dir/fvm.data.sparse.blk"
+
+# fvm.sparse.blk creates a sparse FVM partition image containing the blob
+# partition produced by blob.blk and the data partition produced by data.blk.
+# fvm.sparse.blk is primarily invoked and used by the paver boot, via `fx
+# boot`.
+zircon_tool_action("fvm.sparse.blk") {
+  testonly = true
+  visibility = [ ":*" ]
+  tool = "fvm"
+  outputs = [
+    "$target_out_dir/fvm.sparse.blk",
+  ]
+  sources = []
   deps = [
+    ":blob.blk",
     ":data.blk",
   ]
-  args = fvm_sparse_args + [
-           "--zxcrypt",
-           "--data",
-         ]
+  foreach(label, deps) {
+    sources += get_target_outputs(label)
+  }
+  # Note: this action can not be expressed using the `generate_fvm` template
+  # because it needs to interleave the blob and data flags.
+  args = rebase_path(outputs, root_build_dir) +
+    fvm_sparse_args +
+    [ "--blob" ] +
+    rebase_path(get_target_outputs(":blob.blk"), root_build_dir) +
+    [ "--data" ] +
+    rebase_path(get_target_outputs(":data.blk"), root_build_dir)
 }
 images += [
   {
+    deps = [
+      ":fvm.sparse.blk",
+    ]
     json = {
-      name = "data-template"
+      name = "storage-sparse"
       type = "blk"
     }
-    deps = [
-      ":fvm.data.sparse.blk",
-    ]
-    installer = "fvm.data.sparse.blk"
+    installer = "fvm.sparse.blk"
+    sdk = "fvm.sparse.blk"
     public = [
-      "IMAGE_DATA_FVM_RAW",
+      "IMAGE_FVM_SPARSE",
     ]
-    legacy_copy = "fvm.data.sparse.blk"
+    legacy_copy = "fvm.sparse.blk"
     legacy_copy_dir = legacy_images_dir
   },
 ]
@@ -708,6 +780,10 @@ vboot("vboot") {
 }
 images += [
   {
+    json = {
+      name = "zircon-vboot"
+      type = "vboot"
+    }
     deps = [
       ":vboot",
     ]
@@ -865,11 +941,11 @@ images += [
 group("images") {
   testonly = true
   deps = [
-    ":ids.txt",
     ":default-legacy-images",
+    ":ids.txt",
   ]
   if (!disable_zedboot) {
-    deps += [ ":zedboot" ]
+    deps += [ "zedboot" ]
   }
   foreach(image, images) {
     if (!defined(image.default) || image.default) {
@@ -1008,16 +1084,33 @@ action("update.manifest") {
 
   foreach(image, images) {
     if (defined(image.updater)) {
-      update_manifest += [
-        {
-          target = image.updater
-          forward_variables_from(image,
-                                 [
-                                   "deps",
-                                   "sources",
-                                 ])
-        },
-      ]
+      if (update_kernels == []) {
+        update_manifest += [
+          {
+            target = image.updater
+            forward_variables_from(image,
+                                  [
+                                    "deps",
+                                    "sources",
+                                  ])
+          },
+        ]
+      } else {
+        foreach(kernel, update_kernels) {
+          if (image.updater == kernel) {
+            update_manifest += [
+              {
+                target = image.updater
+                forward_variables_from(image,
+                                      [
+                                        "deps",
+                                        "sources",
+                                      ])
+              },
+            ]
+          }
+        }
+      }
     }
   }
 
@@ -1143,6 +1236,83 @@ action("amber_index") {
   deps += [ ":update.meta" ]
 }
 
+# The system index is the index of all available packages, naming each blobs.json
+# file instead of its merkleroot, and including a tag of the package set the
+# package is a part of (monolith/preinstall/available). Additionally the
+# system_index has the system package itself, and the system update package.
+system_index = "$target_out_dir/system_index"
+
+action("system_index") {
+  visibility = [ ":system_snapshot" ]
+  testonly = true
+
+  script = "manifest.py"
+  args = [ "--absolute" ]
+  outputs = [
+    "$target_out_dir/$target_name",
+  ]
+  args += [ "--output=" + rebase_path(outputs[0], root_build_dir) ]
+  sources = []
+  deps = []
+  foreach(pkg_label, available_packages) {
+    # Find the response file written by package().
+    pkg_target_name = get_label_info(pkg_label, "name")
+    pkg_target_out_dir = get_label_info(pkg_label, "target_out_dir")
+    pkg_rspfile = "$pkg_target_out_dir/${pkg_target_name}.system_index.rsp"
+    deps += [ "${pkg_label}.system_index.rsp" ]
+    sources += [ pkg_rspfile ]
+    args += [ "@" + rebase_path(pkg_rspfile, root_build_dir) ]
+  }
+
+  system_image_meta_dir =
+      get_label_info(":system_image.meta", "target_out_dir") +
+      "/system_image.meta"
+  system_image_blobs_json = system_image_meta_dir + "/blobs.json"
+  args += [
+    "--entry",
+    "system_image/0#monolith=" + rebase_path(system_image_blobs_json, root_build_dir),
+  ]
+  deps += [ ":system_image.meta" ]
+
+  update_meta_dir =
+      get_label_info(":update.meta", "target_out_dir") + "/update.meta"
+  update_blobs_json = update_meta_dir + "/blobs.json"
+  args += [
+    "--entry",
+    "update/0#monolith=" + rebase_path(update_blobs_json, root_build_dir),
+  ]
+  deps += [ ":update.meta" ]
+}
+
+compiled_action("system_snapshot") {
+  tool = "//garnet/go/src/pm:pm_bin"
+  tool_output_name = "pm"
+
+  visibility = [ ":updates" ]
+  testonly = true
+
+  deps = [
+    ":system_index",
+  ]
+
+  inputs = [
+    system_index,
+  ]
+
+  outputs = [
+    "$target_out_dir/system.snapshot",
+  ]
+
+  args = [
+    "snapshot",
+    "--manifest",
+    rebase_path(inputs[0], root_build_dir),
+    "--output",
+    rebase_path(outputs[0], root_build_dir),
+  ]
+}
+
+
 # The blob.manifest that drives blob.blk is just a flat list of files.
 # blob_merkleroot.manifest is a manifest file of "HEXDIGITS=FILENAME"
 # lines.  Note that this repeats all the same merkleroot computations
@@ -1215,6 +1385,7 @@ group("updates") {
     ":amber_publish_blobs",
     ":amber_publish_index",
     ":ids.txt",
+    ":system_snapshot",
   ]
 }
 
@@ -1230,8 +1401,10 @@ action("ids.txt") {
 
   deps = [
     ":system_image.manifest",
+    ":vdso-ids.txt",
   ]
   sources = [
+    "$target_out_dir/vdso-ids.txt",
     system_build_id_map,
   ]
 
@@ -1254,6 +1427,27 @@ action("ids.txt") {
          ] + rebase_path(outputs + sources, root_build_dir)
 }
 
+# The vDSO doesn't appear in any package and so doesn't get into any
+# ids.txt file produced by generate_manifest().  But it appears in memory
+# at runtime and in backtraces, so it should be in the aggregated ids.txt
+# for symbolization.  The vDSO doesn't appear in zircon_boot_manifests, so
+# fetching it out of Zircon's own ids.txt by name is the only thing to do.
+action("vdso-ids.txt") {
+  script = "manifest.py"
+  sources = [
+    "$zircon_build_dir/ids.txt",
+  ]
+  outputs = [
+    "$target_out_dir/vdso-ids.txt",
+  ]
+  args = [
+    "--separator= ",
+    "--output=" + rebase_path(outputs[0], root_build_dir),
+    "--include-source=*/libzircon.so",
+    "--manifest=" + rebase_path(sources[0], root_build_dir),
+  ]
+}
+
 ###
 ### SDK
 ###
@@ -1265,12 +1459,11 @@ foreach(image, images) {
     image_target_name = "${image.sdk}_sdk"
     sdk_images += [ ":$image_target_name" ]
     sdk_atom(image_target_name) {
-      domain = "image"
-      name = image.sdk
       id = "sdk://images/${image.sdk}"
       category = "partner"
       testonly = true
 
+      file_content = "target/$target_cpu/${image.sdk}"
       meta = {
         dest = "images/${image.sdk}-meta.json"
         schema = "image"
@@ -1278,6 +1471,15 @@ foreach(image, images) {
           type = "image"
           name = "${image.sdk}"
           root = "images"
+          file = {
+            if (target_cpu == "x64") {
+              x64 = file_content
+            } else if (target_cpu == "arm64") {
+              arm64 = file_content
+            } else {
+              assert(false, "Unsupported target architecture: $target_cpu")
+            }
+          }
         }
       }
 
@@ -1294,87 +1496,12 @@ foreach(image, images) {
       files = [
         {
           source = image_sources[0]
-          dest = image.sdk
-        },
-      ]
-      new_files = [
-        {
-          source = image_sources[0]
           dest = "target/$target_cpu/${image.sdk}"
-        }
+        },
       ]
 
       non_sdk_deps = image.deps
     }
-  }
-}
-
-# TODO(alainv): Add dependency to zircon.bin when such a target exists.
-zircon_bin_sdk_target_name = "zircon.bin_sdk"
-sdk_images += [ ":$zircon_bin_sdk_target_name" ]
-sdk_atom(zircon_bin_sdk_target_name) {
-  domain = "image"
-  name = "zircon.bin"
-  id = "sdk://images/zircon.bin"
-  category = "partner"
-  testonly = true
-
-  meta = {
-    dest = "images/zircon.bin-meta.json"
-    schema = "image"
-    value = {
-      type = "image"
-      name = "zircon.bin"
-      root = "images"
-    }
-  }
-
-  files = [
-    {
-      source = "${zircon_build_dir}/zircon.bin"
-      dest = "zircon.bin"
-    },
-  ]
-  new_files = [
-    {
-      source = "${zircon_build_dir}/zircon.bin"
-      dest = "target/$target_cpu/zircon.bin"
-    },
-  ]
-}
-
-if (target_cpu == "arm64") {
-  qemu_zircon_bin_sdk_target_name = "qemu-zircon.bin_sdk"
-  sdk_images += [ ":$qemu_zircon_bin_sdk_target_name" ]
-  sdk_atom(qemu_zircon_bin_sdk_target_name) {
-    domain = "image"
-    name = "qemu-zircon.bin"
-    id = "sdk://images/qemu-zircon.bin"
-    category = "partner"
-    testonly = true
-
-    meta = {
-      dest = "images/qemu-zircon.bin-meta.json"
-      schema = "image"
-      value = {
-        type = "image"
-        name = "qemu-zircon.bin"
-        root = "images"
-      }
-    }
-
-    files = [
-      {
-        source = "${zircon_build_dir}/qemu-zircon.bin"
-        dest = "qemu-zircon.bin"
-      },
-    ]
-    new_files = [
-      {
-        source = "${zircon_build_dir}/qemu-zircon.bin"
-        dest = "target/$target_cpu/qemu-zircon.bin"
-      },
-    ]
   }
 }
 

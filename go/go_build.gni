@@ -94,7 +94,7 @@ template("go_build") {
       # GN provides no way to propagate include paths like this, so, this is brittle:
       fdio_include = rebase_path("//zircon/system/ulib/fdio/include")
 
-      zircon_sysroot = rebase_path("$root_out_dir/sdks/zircon_sysroot/arch/$target_cpu/sysroot")
+      zircon_sysroot = rebase_path("$root_out_dir/sdk/exported/zircon_sysroot/arch/$target_cpu/sysroot")
 
       args += [
         "--zircon-sysroot",
@@ -146,8 +146,6 @@ template("go_build") {
     file_base = "tools/$output_name"
 
     sdk_atom("${target_name}_sdk") {
-      domain = "exe"
-      name = output_name
       id = "sdk://tools/$output_name"
 
       category = invoker.sdk_category
@@ -165,16 +163,7 @@ template("go_build") {
         }
       }
 
-      tags = [ "arch:host" ]
-
       files = [
-        {
-          source = output_path
-          dest = output_name
-        },
-      ]
-
-      new_files = [
         {
           source = output_path
           dest = file_base
