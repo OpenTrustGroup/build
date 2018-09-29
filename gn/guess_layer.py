@@ -19,12 +19,16 @@ LAYERS_RE = re.compile('^(garnet|peridot|topaz|vendor/.*)$')
 
 # Returns 0 if name does not match LAYERS_RE.
 # Returns 1 and prints name if it does match.
-def check_import(name):
-    if LAYERS_RE.match(name):
-        print name
-        return 1
-    return 0
+#def check_import(name):
+#    if LAYERS_RE.match(name):
+#        print name
+#        return 1
+#    return 0
 
+# TODO(james): workaround to force using garnet layer for gzos development
+def check_import(name):
+    print "garnet"
+    return 1
 
 def main():
     parser = argparse.ArgumentParser(
