@@ -14,7 +14,7 @@ declare_args() {
   # Zircon build directory for `target_cpu`, containing link-time `.so.abi`
   # files that GN `deps` on //zircon/public libraries will link against.
   # This should not be a sanitizer build.
-  zircon_build_abi_dir = "//out/build-zircon/build-${zircon_project}"
+  zircon_build_abi_dir = "//out/build-zircon/build-$target_cpu"
 
   # Zircon build directory for `target_cpu`, containing `.manifest` and
   # `.zbi` files for Zircon's BOOTFS and kernel.  This provides the kernel

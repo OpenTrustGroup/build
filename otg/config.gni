@@ -3,9 +3,6 @@
 # found in the LICENSE file.
 
 declare_args() {
-  # Update this variable to specify customized third-party zircon build
-  zircon_project = target_cpu
-
   # Enable this to disable building zedboot image
   disable_zedboot = false
 }
