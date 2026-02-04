@@ -1,0 +1,37 @@
+workspace(name = "host")
+
+new_local_repository(
+    name = "third_party_nbl_license_tool",
+    build_file = "//:nbl_license_tool.BUILD",
+    path = "../../third_party/nbl_license_tool",
+)
+
+new_local_repository(
+    name = "third_party_qemu",
+    build_file = "//:qemu.BUILD",
+    path = "../../third_party/qemu",
+)
+
+new_local_repository(
+    name = "soc_term",
+    build_file = "//:soc_term.BUILD",
+    path = "../../third_party/soc_term",
+)
+
+new_local_repository(
+    name = "go_sdk",
+    build_file = "//:go.BUILD",
+    path = "../../prebuilts/go1.11.1",
+)
+
+new_local_repository(
+    name = "third_party_syzkaller",
+    build_file = "//:syzkaller.BUILD",
+    path = "../../third_party/syzkaller",
+)
+
+new_local_repository(
+    name = "scripts",
+    build_file = "//:scripts.BUILD",
+    path = "../../scripts",
+)

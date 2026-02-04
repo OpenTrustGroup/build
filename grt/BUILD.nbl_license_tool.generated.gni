@@ -1,0 +1,10 @@
+# This file is created by generate_build_files.sh. Do not edit manually.
+
+nbl_license_tool_sources = [
+  "//third_party/nbl_license_tool/build.xml",
+  "//third_party/nbl_license_tool//src/com/goldenrivertek/nebula/licensetool/NebulaFileUtil.java",
+  "//third_party/nbl_license_tool//src/com/goldenrivertek/nebula/licensetool/NebulaLicense.java",
+  "//third_party/nbl_license_tool//src/com/goldenrivertek/nebula/licensetool/NebulaLicenseTest.java",
+  "//third_party/nbl_license_tool//src/com/goldenrivertek/nebula/licensetool/NebulaCryptUtil.java",
+  "//third_party/nbl_license_tool//src/com/goldenrivertek/nebula/licensetool/main.java",
+]

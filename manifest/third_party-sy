@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest>
+  <imports>
+    <localimport file="minimal-sy"/>
+  </imports>
+  <projects>
+    <!-- Third Party -->
+    <project name="third_party/rapidjson"
+             path="third_party/rapidjson"
+             remote="ssh://gerrit-sy:29418/third_party/rapidjson"
+             remotebranch="nebula"
+             gerrithost="http://gerrit"/>
+  </projects>
+</manifest>

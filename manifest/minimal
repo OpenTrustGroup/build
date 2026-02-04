@@ -3,12 +3,16 @@
   <projects>
     <project name="build"
              path="build"
-             remote="https://fuchsia.googlesource.com/build"
-             gerrithost="https://fuchsia-review.googlesource.com"/>
+             remote="ssh://gerrit:29418/build"
+             remotebranch="nebula"
+             gerrithost="http://gerrit"/>
   </projects>
   <hooks>
     <hook name="symlink-.gn"
           project="build"
           action="dot_gn_symlink.sh"/>
+    <hook name="symlink-bazel"
+          project="build"
+          action="bazel_symlink.sh"/>
   </hooks>
 </manifest>

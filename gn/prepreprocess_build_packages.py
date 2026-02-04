@@ -6,6 +6,7 @@
 import argparse
 import json
 import sys
+import paths
 
 from package_imports_resolver import PackageImportsResolver
 
@@ -27,11 +28,12 @@ def main():
     parser = argparse.ArgumentParser(description="Determine labels and Fuchsia "
                                      "packages included in the current build")
     parser.add_argument("--packages", help="list of packages", required=True)
+    parser.add_argument("--packages-root", help="path to root of packages", default=paths.FUCHSIA_ROOT)
     args = parser.parse_args()
 
     observer = PackageLabelObserver()
     imports_resolver = PackageImportsResolver(observer)
-    imported = imports_resolver.resolve_imports(json.loads(args.packages))
+    imported = imports_resolver.resolve_imports(json.loads(args.packages), args.packages_root)
     labels = observer.labels
 
     sys.stdout.write("imported = [%s]\n" %

@@ -1,0 +1,290 @@
+#workspace(name = "ree")
+
+load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
+
+git_repository(
+    name = "io_bazel_rules_nbl",
+    branch = "nebula",
+    remote = "http://gerrit/bazel/rules_nbl",
+)
+
+load(
+    "@io_bazel_rules_nbl//nbl:deps.bzl",
+    "nbl_rules_dependencies",
+    "nbl_wrap_toolchain",
+)
+
+nbl_rules_dependencies()
+
+new_local_repository(
+    name = "clang",
+    build_file_content = "",
+    path = "../../buildtools/linux-x64/clang",
+)
+
+new_local_repository(
+    name = "gcc",
+    build_file = "//:gcc.BUILD",
+    path = "../../prebuilts/gcc-linaro-7.5.0-2019.12",
+)
+
+nbl_wrap_toolchain(
+    name = "aarch64-linux-clang7",
+    compiler = "@clang//:BUILD.bazel",
+    sysroot = "@gcc//:BUILD.bazel",
+    target = "aarch64-linux-gnu",
+)
+
+# GCC configuration for reference
+# nbl_wrap_toolchain(
+#     name = "aarch64-linux-gcc",
+#     compiler= "@gcc//:BUILD.bazel",
+#     target = "aarch64-linux-gnu",
+#     sysroot = "@gcc//:BUILD.bazel",
+# )
+
+# Clang10 configuration for reference
+# new_local_repository(
+#     name = "clang10",
+#     path = "buildtools/linux-x64/clang10",
+#     build_file_content = "",
+# )
+#
+# new_local_repository(
+#     name = "sysroot",
+#     path = "prebuilts/gcc-linaro-7.5.0-2019.12/aarch64-linux-gnu",
+#     build_file_content = "",
+# )
+#
+# nbl_wrap_toolchain(
+#     name = "aarch64-linux-clang10",
+#     compiler= "@clang10//:BUILD.bazel",
+#     sysroot= "@sysroot//:BUILD.bazel",
+#     target = "aarch64-linux-gnu",
+# )
+
+###############################################################################
+### External Repos
+###############################################################################
+new_local_repository(
+    name = "hee",
+    build_file = "//:hee-trusty.BUILD",
+    path = "../../third_party/hee-trusty",
+    workspace_file_content = "",
+)
+
+new_local_repository(
+    name = "ree",
+    build_file = "//:ree-trusty.BUILD",
+    path = "../../third_party/ree-trusty",
+    workspace_file_content = "",
+)
+
+new_local_repository(
+    name = "dropbear",
+    build_file = "//:dropbear.BUILD",
+    path = "../../third_party/dropbear",
+    workspace_file_content = "",
+)
+
+new_local_repository(
+    name = "iperf3",
+    build_file = "//:iperf3.BUILD",
+    path = "../../third_party/iperf-vsock",
+    workspace_file_content = "",
+)
+
+new_local_repository(
+    name = "zircon",
+    build_file = "//:zircon.BUILD",
+    path = "../../zircon",
+    workspace_file_content = "",
+)
+
+new_local_repository(
+    name = "gtest",
+    build_file = "//:gtest.BUILD",
+    path = "../../third_party/gtest",
+    workspace_file_content = "",
+)
+
+local_repository(
+    name = "googletest",
+    path = "../../third_party/googletest",
+)
+
+local_repository(
+    name = "boringssl",
+    path = "../../third_party/boringssl",
+)
+
+local_repository(
+    name = "rapidjson",
+    path = "../../third_party/rapidjson",
+)
+
+local_repository(
+    name = "fdt",
+    path = "../../third_party/fdt",
+)
+
+local_repository(
+    name = "syzkaller_nbl",
+    path = "../../third_party/syzkaller_nbl",
+)
+
+new_local_repository(
+    name = "socat",
+    build_file = "//:socat.BUILD",
+    path = "../../third_party/socat",
+    workspace_file_content = "",
+)
+
+local_repository(
+    name = "com_github_grpc_grpc",
+    path = "../../third_party/grpc",
+)
+load("@com_github_grpc_grpc//bazel:grpc_deps.bzl", "grpc_deps")
+grpc_deps()
+load("@com_github_grpc_grpc//bazel:grpc_extra_deps.bzl", "grpc_extra_deps")
+grpc_extra_deps()
+
+local_repository(
+    name = "com_github_protocolbuffers_protobuf",
+    path = "../../third_party/protobuf",
+)
+
+new_local_repository(
+    name = "openssl",
+    build_file = "//:openssl.BUILD",
+    path = "../../third_party/openssl",
+    workspace_file_content = "",
+)
+
+new_local_repository(
+    name = "linux_4.9",
+    build_file = "//:linux.BUILD",
+    path = "../../linux",
+    workspace_file_content = "",
+)
+
+new_local_repository(
+    name = "linux_4.19",
+    build_file = "//:linux.BUILD",
+    path = "../../linux-4.19",
+    workspace_file_content = "",
+)
+
+new_local_repository(
+    name = "linux_5.4",
+    build_file = "//:linux.BUILD",
+    path = "../../linux-5.4",
+    workspace_file_content = "",
+)
+
+new_local_repository(
+    name = "linux_6.6",
+    build_file = "//:linux.BUILD",
+    path = "../../linux-6.6",
+    workspace_file_content = "",
+)
+
+new_local_repository(
+    name = "scripts",
+    build_file = "//:scripts.BUILD",
+    path = "../../scripts",
+    workspace_file_content = "",
+)
+
+new_local_repository(
+    name = "gen_rootfs",
+    build_file = "//:gen_rootfs.BUILD",
+    path = "../../gen_rootfs",
+    workspace_file_content = "",
+)
+
+new_local_repository(
+    name = "busybox",
+    build_file = "//:busybox.BUILD",
+    path = "../../third_party/busybox",
+    workspace_file_content = "",
+)
+
+new_local_repository(
+    name = "fuchsia_out",
+    build_file = "//:fuchsia_out.BUILD",
+    path = "../../out/arm64",
+    workspace_file_content = "",
+)
+
+new_local_repository(
+    name = "nbl_otrp_sdk",
+    build_file = "//:nbl_otrp_sdk.BUILD",
+    path = "../../third_party/otrp/nbl_otrp_sdk",
+    workspace_file_content = "",
+)
+
+new_local_repository(
+    name = "nbl_sdk",
+    build_file = "//:nbl_sdk.BUILD",
+    path = "../../third_party/ree-trusty/nbl_sdk",
+    workspace_file_content = "",
+)
+
+local_repository(
+    name = "virglrenderer",
+    path = "../../third_party/virglrenderer",
+)
+
+local_repository(
+    name = "libepoxy",
+    path = "../../third_party/libepoxy",
+)
+
+local_repository(
+    name = "libdrm",
+    path = "../../third_party/ree-trusty/nbl_tui/third_party/libdrm",
+)
+
+local_repository(
+    name = "libgbm",
+    path = "../../third_party/virtio_gpu_prebuilts/libgbm",
+)
+
+local_repository(
+    name = "libegl",
+    path = "../../third_party/virtio_gpu_prebuilts/libegl",
+)
+
+local_repository(
+    name = "libgles",
+    path = "../../third_party/virtio_gpu_prebuilts/libgles",
+)
+
+local_repository(
+    name = "KHR",
+    path = "../../third_party/virtio_gpu_prebuilts/KHR",
+)
+
+local_repository(
+    name = "libsdl2",
+    path = "../../third_party/virtio_gpu_prebuilts/libsdl2",
+)
+
+local_repository(
+    name = "libqt5",
+    path = "../../third_party/virtio_gpu_prebuilts/libqt5",
+)
+
+local_repository(
+    name = "libwayland",
+    path = "../../third_party/virtio_gpu_prebuilts/libwayland",
+)
+local_repository(
+    name = "libglib2",
+    path = "../../third_party/virtio_gpu_prebuilts/libglib2",
+)
+local_repository(
+    name = "libalsa",
+    path = "../../third_party/virtio_gpu_prebuilts/libalsa",
+)

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest>
+  <projects>
+    <project name="build"
+             path="build"
+             remote="ssh://gerrit-sy:29418/build"
+             remotebranch="nebula"
+             gerrithost="http://gerrit"/>
+  </projects>
+  <hooks>
+    <hook name="symlink-.gn"
+          project="build"
+          action="dot_gn_symlink.sh"/>
+    <hook name="symlink-bazel"
+          project="build"
+          action="bazel_symlink.sh"/>
+  </hooks>
+</manifest>

@@ -20,6 +20,12 @@ BUILDTOOLS_PATH = os.path.join(FUCHSIA_ROOT, "buildtools", '%s-%s' % (
 DEBUG_OUT_DIR = os.path.join(FUCHSIA_ROOT, "out", "debug-x64")
 RELEASE_OUT_DIR = os.path.join(FUCHSIA_ROOT, "out", "release-x64")
 
+
+FUCHSIA_BUILD_DIR = os.path.join(FUCHSIA_ROOT, 'out/arm64')
+FUCHSIA_ARCH = 'arm64'
+ZIRCON_DBG_BUILD_DIR = os.path.join(FUCHSIA_ROOT, 'out/build-zircon')
+ZIRCON_REL_BUILD_DIR = os.path.join(FUCHSIA_ROOT, 'out/build-zircon-release')
+
 _BUILD_TOOLS = {}
 
 def build_tool(package, tool):

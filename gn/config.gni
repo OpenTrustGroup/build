@@ -30,6 +30,7 @@ declare_args() {
   # TODO(mcgrathr): Make Zircon manifests self-relative too and then
   # merge this and toolchain_manifests into generic aux_manifests.
   zircon_aux_manifests = [ "${zircon_build_dir}-ulib/bootfs.manifest" ]
+  zircon_release_aux_manifests = [ "${zircon_release_build_dir}-ulib/bootfs.manifest" ]
 
   # Manifest files describing files to go into the `/boot` filesystem.
   # Can be either // source paths or absolute system paths.
@@ -41,6 +42,7 @@ declare_args() {
   # Zircon source directory and thus their contents can be taken as
   # relative to `get_path_info(entry, "dir") + "/.."`.
   zircon_boot_manifests = [ "$zircon_build_dir/bootfs.manifest" ]
+  zircon_release_boot_manifests = [ "$zircon_release_build_dir/bootfs.manifest" ]
 
   # Groups to include from the Zircon /boot manifest into /boot.
   # This is either "all" or a comma-separated list of one or more of:

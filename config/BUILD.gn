@@ -69,7 +69,15 @@ config("relative_paths") {
   ]
 }
 
+declare_args() {
+  with_syzkaller = 0
+}
+
 config("debug") {
+  defines = [ "__Nebula__=1" ]
+  if (with_syzkaller == 1) {
+    defines += [ "WITH_SYZKALLER=1" ]
+  }
   cflags = [
     "-g",
     "-Og",
@@ -79,6 +87,10 @@ config("debug") {
 
 config("release") {
   defines = [ "NDEBUG=1" ]
+  defines += [ "__Nebula__=1" ]
+  if (with_syzkaller == 1) {
+    defines += [ "WITH_SYZKALLER=1" ]
+  }
   cflags = [
     "-O3",
     "-fdata-sections",
@@ -129,7 +141,7 @@ config("default_warnings") {
     cflags += [
       # TODO(TO-99): Remove once all the cases of unused 'this' lamda capture
       # have been removed from our codebase.
-      "-Wno-unused-lambda-capture",
+      #"-Wno-unused-lambda-capture",
 
       # TODO(TO-100): Remove once comparator types provide const call operator.
       "-Wno-user-defined-warnings",
@@ -185,3 +197,21 @@ config("default_libs") {
     configs += [ "//build/config/mac:default_libs" ]
   }
 }
+
+config("no_profile") {
+  # The difference between this config and removing //build/config/profile is
+  # the dynamic linker setting which is necessary for it to use at runtime with
+  # the libraries it was linked against.
+  cflags = [
+    "-fno-profile-instr-generate",
+    "-fno-coverage-mapping",
+  ]
+}
+
+config("optimize_speed") {
+  cflags = [ "-O3" ]
+  ldflags = cflags
+  # rustflags = [ "-Copt-level=3" ]
+  configs = [ ":linker_string_merging" ]
+}
+

@@ -96,11 +96,14 @@ def main():
                         help="list of files omitted from user.bootfs",
                         default="")
     parser.add_argument("--build-root", help="path to root of build directory")
+    parser.add_argument("--packages-root", help="path to root of packages", default=paths.FUCHSIA_ROOT)
     args = parser.parse_args()
+
+    #print("packages: %s" % args.packages)
 
     amalgamation = Amalgamation(args.build_root)
     imports_resolver = PackageImportsResolver(amalgamation)
-    imported = imports_resolver.resolve_imports(json.loads(args.packages))
+    imported = imports_resolver.resolve_imports(json.loads(args.packages), args.packages_root)
     if not imported:
         return 1
 

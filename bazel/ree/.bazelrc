@@ -1,0 +1,9 @@
+startup --output_base=../../out/.bazel-ree
+build:linux_4.9 --platforms=//:linux_4.9
+build:linux_4.19 --platforms=//:linux_4.19
+build:linux_5.4 --platforms=//:linux_5.4
+build:linux_6.6 --platforms=//:linux_6.6
+build --host_javabase=@local_jdk//:jdk
+build --incompatible_enable_cc_toolchain_resolution
+#build --strip=never # enable this option to preserve debug symbols
+#build --sandbox_debug -s --toolchain_resolution_debug

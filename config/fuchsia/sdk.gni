@@ -11,5 +11,6 @@ declare_args() {
     "//garnet/public",
     "//peridot/public",
     "//topaz/public",
+    "//vendor/grt/public",
   ]
 }

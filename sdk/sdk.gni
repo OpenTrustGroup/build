@@ -28,6 +28,9 @@ import("sdk_molecule.gni")
 #     shape.
 #     Defaults to true.
 #
+#   customized_folder (optional)
+#     Like "old_schol", if 'customized_foler' is true, the inner folder of sdk will be customized completely.
+#
 #   domains (optional)
 #     If `export` is true, specifies the domains of SDK elements to export.
 #     Only the "cpp" domain is currently supported.
@@ -68,6 +71,7 @@ template("sdk") {
                              "domains",
                              "export",
                              "old_school",
+                             "customized_folder",
                            ])
 
     metadata = [
@@ -173,9 +177,11 @@ template("sdk") {
                "--depname",
                rebase_path(stamp_file, root_build_dir),
              ]
-
       if (defined(invoker.old_school) && invoker.old_school) {
         args += [ "--old-school" ]
+      }
+      if (defined(invoker.customized_folder) && invoker.customized_folder) {
+        args += [ "--customized-folder" ]
       }
 
       deps = [

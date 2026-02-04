@@ -1,0 +1,212 @@
+# Copyright 2020 GoldenRiver Technology Co., All rights reserved.
+# Copyright 2018 The Fuchsia Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+import("//build/sdk/sdk_atom.gni")
+
+# A set of C/C++ library exportable in Nebula SDK as sources.
+#
+# Parameters
+#
+#   name (required)
+#     Directory Name of the library in the Nebula SDK.
+#
+#   category (required)
+#     Category in Nebula SDK: 'hee' or 'ree'.
+#
+#   hdr_dir (optional)
+#     Header directory (related to the directory of BUILD.gn) to be exported to Nebula SDK.
+#     All header files under hdr_dir will be copied to <nebula_sdk_root>/<category>/<name>/include/
+#
+#   hdr_dirs (optional)
+#     List of header directories to be exported to Nebula SDK.
+#     All header files under hdr_dirs will be copied to <nebula_sdk_root>/<category>/<name>/include/<dest>
+#     Example:
+#       hdr_dirs = [
+#         {
+#           source = "include"
+#           dest = "app/cpp"
+#         },
+#         {
+#           source = "."
+#           dest = "fidl/cpp"
+#         },
+#       ]
+#
+#   libs (optional)
+#     Libraries to be exported to Nebula SDK.
+#     Libraries in the list will be copied to <nebula_sdk_root>/<category>/<name>/lib/
+#
+#   files (optional)
+#     Extra files to be exported to Nebula SDK.
+#     File in the list should be in the form of {source,dest} dictionary and will be
+#     copied to <nebula_sdk_root>/<category>/<name>/
+#     Example:
+#       files = [
+#         {
+#           source = "//zircon/trusty/lk/trusty/include/pal/shared/lk/list.h"
+#           dest = "include/lk/list.h"
+#         }
+#       ]
+#
+#   deps (optional)
+#     List of GN labels which this target needs built.
+#
+
+template("nbl_sdk_library") {
+  if (!defined(invoker.name)) {
+    assert(false, "Must specify a name")
+  }
+
+  if (!defined(invoker.category)) {
+    assert(false, "Must specify category")
+  }
+
+  sdk_atom(target_name) {
+    domain = "cpp"
+    name = invoker.name
+    output_category = invoker.category
+    output_category = "$output_category/$name"
+
+    tags = [
+      "type:compiled_shared",
+      "arch:target"
+    ]
+
+    files = []
+    if (defined(invoker.files)) {
+      files += invoker.files
+    }
+
+    if (defined(invoker.hdr_dir)) {
+      hdr_dir = invoker.hdr_dir
+      # copy all header files into sdk.
+      tmp_files = exec_script("//build/sdk/list_files.sh", [rebase_path(hdr_dir, root_build_dir)], "list lines")
+      foreach(f, tmp_files) {
+        extension = get_path_info(f, "extension")
+        if ((extension == "h") || (extension == "hh") || (extension == "H")) {
+          files += [
+            {
+              source = "$hdr_dir/$f"
+              dest = "include/$f"
+            },
+          ]
+        }
+      }
+    }
+
+    if (defined(invoker.hdr_dirs)) {
+      hdr_dirs = invoker.hdr_dirs
+      foreach(dir, hdr_dirs) {
+        source_dir = dir.source
+        dest_dir = dir.dest
+        tmp_files = []
+        tmp_files = exec_script("//build/sdk/list_files.sh", [rebase_path(source_dir, root_build_dir)], "list lines")
+        foreach(f, tmp_files) {
+          extension = get_path_info(f, "extension")
+          if ((extension == "h") || (extension == "hh") || (extension == "H")) {
+            files += [
+              {
+                source = "$source_dir/$f"
+                if (source_dir == "." || source_dir == "") {
+                  source = "$f"
+                }
+
+                dest = "include/$dest_dir/$f"
+                if (dest_dir == "." || dest_dir == "") {
+                  dest = "include/$f"
+                }
+              },
+            ]
+          }
+        }
+      }
+    }
+
+    if (defined(invoker.libs)) {
+      foreach(lib, invoker.libs) {
+        tmp_dir = target_out_dir
+        extension = get_path_info(lib, "extension")
+        if (extension == "so") {
+          tmp_dir = get_label_info(":bogus($shlib_toolchain)", "root_out_dir")
+        }
+
+        if (shlib_toolchain != "//build/toolchain:host_x64-shared") {
+          files += [
+            {
+              source = "$tmp_dir/${lib}"
+              dest = "lib/${lib}"
+            }
+          ]
+        }
+      }
+    }
+
+    data = []
+
+    if (defined(invoker.glue_lib)) {
+      lib = invoker.glue_lib
+      extension = get_path_info(lib, "extension")
+      if (extension == "a") {
+        files += [
+          {
+            source = "$target_out_dir/${lib}"
+            dest = "lib/${lib}"
+          }
+        ]
+        data += ["cc_import("]
+        data += ["    name = \"glue\","]
+        data += ["    static_library = \"lib/${lib}\","]
+        data += ["    alwayslink = True,"]
+        data += ["    visibility = [ \"//visibility:public\" ]"]
+        data += [")"]
+      }
+    }
+
+    data += ["cc_library("]
+    data += ["    name = \"${name}\","]
+    data += ["    srcs = ["]
+    if (defined(invoker.libs)) {
+      foreach(lib, invoker.libs) {
+        data += ["        \"lib/${lib}\","]
+      }
+    } else if (invoker.name == "openssl") {
+        # openssl has special BUILD.gn, its library should be copied and renamed.
+        # Use workaround method to solve this problem.
+        data += ["        \"lib/libopenssl_crypto.a\","]
+    }
+    data += ["    ],"]
+    data += ["    hdrs = glob(["]
+    data += ["        \"include/**/*.h\","]
+    data += ["        \"include/**/*.hh\","]
+    data += ["        \"include/**/*.H\","]
+    data += ["    ]),"]
+    if (defined(invoker.glue_lib)) {
+      data += ["    deps = ["]
+      data += ["        \":glue\","]
+      data += ["    ],"]
+    }
+    data += ["    strip_include_prefix = \"include\","]
+    data += ["    visibility = [ \"//visibility:public\" ]"]
+    data += [")"]
+
+    write_file("$target_out_dir/BUILD.bazel",data)
+    files += [
+      {
+        source = "$target_out_dir/BUILD.bazel"
+        dest = "BUILD.bazel"
+      }
+    ]
+
+    package_deps = []
+    if (defined(invoker.package_deps)) {
+      package_deps += invoker.package_deps
+    }
+
+    non_sdk_deps = []
+    if (defined(invoker.deps)) {
+      non_sdk_deps += invoker.deps
+    }
+  }
+}
