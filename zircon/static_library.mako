@@ -1,7 +1,7 @@
 <%include file="header.mako" />
 
 import("//build/gn/config.gni")
-import("//build/sdk/sdk_atom.gni")
+import("//build/nebula/nbl_sdk_library.gni")
 
 _lib = "$target_out_dir/${data.lib_name}"
 
@@ -45,13 +45,12 @@ group("${data.name}") {
   ]
 }
 
-sdk_atom("${data.name}_sdk") {
-  domain = "cpp"
+nbl_sdk_library("${data.name}_sdk") {
   name = "${data.name}"
+  category = "hee"
 
-  tags = [
-    "type:compiled_static",
-    "arch:target",
+  libs = [
+    "${data.lib_name}",
   ]
 
   files = [
@@ -73,7 +72,7 @@ sdk_atom("${data.name}_sdk") {
     % endfor
   ]
 
-  non_sdk_deps = [
+  deps = [
     ":${data.name}",
   ]
 }

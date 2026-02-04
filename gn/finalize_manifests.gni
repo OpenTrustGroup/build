@@ -1,0 +1,258 @@
+# Copyright 2018 The Fuchsia Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+# GoldenRiverTek specific configs
+#import("//build/grt/config.gni")
+
+#import("//build/config/clang/clang.gni")
+
+import("//build/grt/config.gni")
+
+import("//build/gn/config.gni")
+import("//build/gn/packages.gni")
+import("//build/package.gni")
+
+testonly = true
+
+finalize_manifests_extra = [
+  "//build/gn/elfinfo.py",
+  "//build/gn/manifest.py",
+  "//build/gn/variant.py",
+  "//build/gn/package_imports_resolver.py",
+]
+
+# NOTE(GRT): Rewrite finalize_manifests from action to template to reduce duplicated codes.
+# final_release_groups : if module's group is in this var, then added into finalize_manifests. "all" is all modules.
+# final_boot_manifest : finally created manifest about /boot.
+# final_system_manifest : finally created manifest about /system.
+# final_archive_manifest : finally created manifest about archive.
+# final_package_manifest : finally created manifest about package.
+# final_build_id_file : file containts build id of packages.
+# is_release : true/false : whether or not to buid release version.
+template("finalize_manifests_template") {
+  assert(defined(invoker.final_release_groups),
+         "final_release_groups now supports only 'all' or '' (empty)")
+  assert(defined(invoker.final_boot_manifest),
+         "final_boot_manifest cannot be empty")
+  assert(defined(invoker.final_system_manifest),
+         "final_system_manifest cannot be empty")
+  assert(defined(invoker.final_build_id_file),
+         "final_build_id_file cannot be empty")
+  assert(defined(invoker.final_archive_manifest),
+         "final_archive_manifest cannot be empty")
+  assert(defined(invoker.final_package_manifest),
+         "final_package_manifest cannot be empty")
+  assert(defined(invoker.is_release), "is_release cannot be empty.")
+
+  # This script uses "finalize_manifests.py" and the arguments is saved in "response_file_args",
+  # because the arguments are tool long, so saved in a temp file. [this is impl by GN tool.]
+  # It will create the build id list(final_build_id_file), manifest files(final_boot_manifest & final_system_manifest & final_archive_manifest & final_package_manifest),
+  # by --manifest & --binary.
+  # from one "--output", the "--manifest" files will be output into this file. The manifest before all "--output" are the libs required by later.
+  action(target_name) {
+    visibility = [
+      ":*",
+      "//build/bootfs:*",
+    ]
+
+    packages_file = "$target_gen_dir/packages"
+
+    # includes all config files such as apps.config.
+    system_manifest_file = "$target_gen_dir/system.bootfs.manifest"
+
+    # Travel the whole json tree from $fuchsia_packages(project json, such as venus-hee and bootfs),
+    # and then make the targets-file and the system-manifest.
+    # targets-file containts all modules only in garent layer, which will be kept in "/system" of image.
+    # system-manifest contains resources set in json files, such as apps.config.
+    _result = exec_script("//build/gn/process_build_packages.py",
+                          [
+                            "--targets-file",
+                            rebase_path(packages_file),
+                            "--system-manifest",
+                            rebase_path(system_manifest_file),
+
+                            # A list of strings in GN syntax is valid JSON too.
+                            "--packages=$fuchsia_packages",
+                            "--build-root",
+                            rebase_path(root_build_dir),
+                          ],
+                          "scope",
+                          rebase_path(packages_imported))
+
+    # By is_release, find the real bootfs.manifest file of zircon.
+    if (invoker.is_release == true) {
+      real_zircon_boot_manifests = zircon_release_boot_manifests
+      real_zircon_aux_manifests = zircon_release_aux_manifests
+    } else {
+      real_zircon_boot_manifests = zircon_boot_manifests
+      real_zircon_aux_manifests = zircon_aux_manifests
+    }
+
+    script = "//build/gn/finalize_manifests.py"
+    inputs = finalize_manifests_extra
+
+    depfile = "$root_out_dir/${target_name}.d"
+    outputs = [
+      invoker.final_boot_manifest,
+      invoker.final_system_manifest,
+      invoker.final_build_id_file,
+    ]
+
+    deps = _result.deps
+    if (defined(invoker.deps)) {
+      deps += invoker.deps
+    }
+
+    sources = []
+    response_file_args = [
+      "--depfile=" + rebase_path(depfile, root_build_dir),
+      "--build-id-file=" +
+          rebase_path(invoker.final_build_id_file, root_build_dir),
+    ]
+
+    if (defined(invoker.exclude_system_pkgs) &&
+        invoker.exclude_system_pkgs != [ "" ]) {
+      _result.packages -= invoker.exclude_system_pkgs
+    }
+
+    if (defined(invoker.exclude_boot_pkgs) &&
+        invoker.exclude_boot_pkgs != [ "" ]) {
+      foreach(pkg, invoker.exclude_boot_pkgs) {
+        response_file_args += [ "--exclude_boot_pkg=" + pkg ]
+      }
+    }
+
+    #GRT: add "--image-type" option for which image will be created.
+    if (invoker.is_release == true) {
+      response_file_args += [ "--image-type=release" ]
+    } else {
+      response_file_args += [ "--image-type=debug" ]
+    }
+
+    # First the toolchain and Zircon "ulib" manifests are pure auxiliaries:
+    # they just supply libraries that might satisfy dependencies.
+
+    sources += toolchain_manifests
+    foreach(manifest, toolchain_manifests) {
+      manifest_cwd = get_path_info(rebase_path(manifest), "dir")
+      response_file_args += [
+        "--cwd=$manifest_cwd",
+        "--manifest=" + rebase_path(manifest),
+      ]
+    }
+
+    sources += real_zircon_aux_manifests
+    foreach(manifest, real_zircon_aux_manifests) {
+      manifest_cwd = get_path_info(rebase_path(manifest), "dir") + "/.."
+      response_file_args += [
+        "--cwd=$manifest_cwd",
+        "--manifest=" + rebase_path(manifest),
+      ]
+    }
+
+    # Next, everything that will go into the final /boot manifest.
+    response_file_args += [
+      "--output=" + rebase_path(invoker.final_boot_manifest, root_build_dir),
+      "--groups=$zircon_boot_groups",
+    ]
+
+    sources += real_zircon_boot_manifests
+    foreach(manifest, real_zircon_boot_manifests) {
+      manifest_cwd = get_path_info(rebase_path(manifest), "dir") + "/.."
+      response_file_args += [
+        "--cwd=$manifest_cwd",
+        "--manifest=" + rebase_path(manifest),
+      ]
+    }
+
+    # All the manifests generated by this build are relative to root_build_dir.
+    response_file_args += [
+      "--cwd=.",
+      "--groups=all",
+    ]
+
+    foreach(package, _result.packages) {
+      package_manifest = "$root_build_dir/package/$package/boot_manifest"
+
+      sources += [ package_manifest ]
+
+      response_file_args +=
+          [ "--manifest=" + rebase_path(package_manifest, root_build_dir) ]
+    }
+
+    # If final_release_groups == "", override zircon_system_groups to remove
+    # group of "misc,test". This ensures same groups in garnet/zircon layer.
+    if (invoker.final_release_groups != "all") {
+      zircon_system_groups = "${invoker.final_release_groups}"
+    }
+
+    # Finally, everything that will go into the final /system manifest.
+    response_file_args += [
+      "--output=" + rebase_path(invoker.final_system_manifest, root_build_dir),
+      "--groups=$zircon_system_groups",
+    ]
+    foreach(manifest, real_zircon_boot_manifests) {
+      manifest_cwd = get_path_info(rebase_path(manifest), "dir") + "/.."
+      response_file_args += [
+        "--cwd=$manifest_cwd",
+        "--manifest=" + rebase_path(manifest),
+      ]
+    }
+
+    # All the manifests generated by this build are relative to root_build_dir.
+    # Use "" instead of "all" for garnet packages.
+    response_file_args += [
+      "--cwd=.",
+      "--groups=${invoker.final_release_groups}",
+    ]
+
+    # TODO(mcgrathr,jamesr): When process_build_packages.py drops support for
+    # package JSON files adding files directly, this can go away.
+    # GN won't let us make it a source because it's in the build directory
+    # but is written implicitly at gen time rather than by a proper action.
+    # We're relying on the depfile to notice its changes.
+    #sources += [ system_manifest_file ]
+    response_file_args += [ "--manifest=" + rebase_path(system_manifest_file) ]
+
+    foreach(package, _result.packages) {
+      package_manifest = "$root_build_dir/package/$package/system_manifest"
+
+      sources += [ package_manifest ]
+
+      response_file_args +=
+          [ "--manifest=" + rebase_path(package_manifest, root_build_dir) ]
+    }
+
+    foreach(package, _result.packages) {
+      package_manifest = "$root_build_dir/package/$package/archive_manifest"
+      final_manifest =
+          "$root_build_dir/package/$package/${invoker.final_archive_manifest}"
+
+      sources += [ package_manifest ]
+
+      outputs += [ final_manifest ]
+      response_file_args += [
+        "--standalone-output=" + rebase_path(final_manifest, root_build_dir),
+        "--manifest=" + rebase_path(package_manifest, root_build_dir),
+      ]
+    }
+
+    foreach(package, _result.packages) {
+      package_manifest = "$root_build_dir/package/$package/package_manifest"
+      final_manifest =
+          "$root_build_dir/package/$package/${invoker.final_package_manifest}"
+
+      sources += [ package_manifest ]
+
+      outputs += [ final_manifest ]
+      response_file_args += [
+        "--standalone-output=" + rebase_path(final_manifest, root_build_dir),
+        "--manifest=" + rebase_path(package_manifest, root_build_dir),
+      ]
+    }
+
+    response_file_contents = response_file_args
+    args = [ "@{{response_file_name}}" ]
+  }
+}

@@ -268,7 +268,9 @@ def strip_binary_manifest(manifest, stripped_dir, examined):
         # the file to be installed is called foo and the unstripped file has
         # the same name in the exe.unstripped or lib.unstripped subdirectory.
         if filename.endswith('.strip'):
-            debugfile = filename[:-6]
+            # GRT: There's no un-stripped elf in buildroot.
+            debugfile = filename
+            # debugfile = filename[:-6]
         else:
             dir, file = os.path.split(filename)
             if file.endswith('.so') or '.so.' in file:
@@ -320,10 +322,12 @@ def strip_binary_manifest(manifest, stripped_dir, examined):
             entry, info, debug = make_debug_file(entry, info)
         stripped_manifest.append(binary_entry(entry, info))
         if debug is None:
-            print 'WARNING: no debug file found for %s' % info.filename
+            # GRT: it's meaningless due to all buildroot binaries were stripped
+            # print 'WARNING: no debug file found for %s' % info.filename
             continue
         assert debug.build_id, "'%s' has no build ID" % debug.filename
-        assert not debug.stripped, "'%s' is stripped" % debug.filename
+        # GRT: Stripped is done in building common(qemu) image.
+        # assert not debug.stripped, "'%s' is stripped" % debug.filename
         assert info == debug._replace(filename=info.filename, stripped=True), (
             "Debug file mismatch: %r vs %r" % (info, debug))
         debug_list.append(debug)
@@ -490,6 +494,7 @@ def parse_args():
 Massage manifest files from the build to produce images.
 ''',
         epilog='''
+The --image-type is created image's type, if file which set the same image-type will be put in manifest.
 The --cwd and --group options apply to subsequent --manifest arguments.  Each
 input --manifest is assigned to the preceding --output/-standalone-output
 argument file.  Any input --manifest that precedes all --output arguments just
@@ -497,6 +502,8 @@ supplies auxiliary files implicitly required by other (later) input manifests,
 but does not add all its files to any --output manifest.  This is used for
 shared libraries and the like.
 ''')
+    parser.add_argument('--image-type', required=True,
+                        help='Which image will be created.')
     parser.add_argument('--build-id-file', required=True,
                         help='Output build ID list')
     parser.add_argument('--depfile',
@@ -510,6 +517,8 @@ shared libraries and the like.
     parser.add_argument('--groups',
                         help='"all" or comma-separated groups to include')
     parser.add_argument('--manifest', action=input_manifest_action,
+                        help='Input manifest file (must exist)')
+    parser.add_argument('--exclude_boot_pkgs', action='append',
                         help='Input manifest file (must exist)')
     parser.add_argument('--binary', action=input_binary_action, default=[],
                         help='Take matching binaries from auxiliary manifests')
@@ -530,7 +539,7 @@ def main():
     standalone_unselected = {}
     for input in args.manifest:
         selected, unselected, groups_seen = manifest.ingest_manifest_file(
-            input.file, input.cwd, input.groups, '.', input.output_group)
+            args.image_type, input.file, input.cwd, input.groups, '.', input.output_group)
 
         if not isinstance(input.groups, bool):
             unused_groups = input.groups - groups_seen - set([None])
@@ -539,6 +548,12 @@ def main():
                     '%s not found in %r; try one of: %s' %
                     (', '.join(map(repr, unused_groups)), input.file,
                      ', '.join(map(repr, groups_seen - input.groups))))
+
+        # GRT: Excludes unneeded packages from /boot
+        if args.exclude_boot_pkgs:
+            for pkg in args.exclude_boot_pkgs:
+                selected = [x for x in selected if x.target.find(pkg) == -1]
+                unselected = [x for x in unselected if x.target.find(pkg) == -1]
 
         if isinstance(input.output_group, str):
             standalone_output[input.output_group] = selected

@@ -27,9 +27,9 @@ class PackageImportsResolver:
         self.observer = observer
 
     def resolve(self, imports):
-        return self.resolve_imports(imports)
+        return self.resolve_imports(imports, paths.FUCHSIA_ROOT)
 
-    def resolve_imports(self, import_queue):
+    def resolve_imports(self, import_queue, packages_root):
 
         def detect_duplicate_keys(pairs):
             keys = set()
@@ -44,7 +44,8 @@ class PackageImportsResolver:
         imported = set(import_queue)
         while import_queue:
             config_name = import_queue.pop()
-            config_path = os.path.join(paths.FUCHSIA_ROOT, config_name)
+            config_path = os.path.join(packages_root, config_name)
+            # sys.stderr.write("loading config %s\n" % config_path)
             try:
                 with open(config_path) as f:
                     try:

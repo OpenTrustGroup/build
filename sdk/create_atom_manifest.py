@@ -45,6 +45,8 @@ def main():
     parser.add_argument('--gn-label',
                         help='GN label of the atom',
                         required=True)
+    parser.add_argument('--output-category',
+                        help='category for outputing to SDK')
     args = parser.parse_args()
 
     if args.name:
@@ -109,6 +111,7 @@ def main():
     all_atoms.update([Atom({
         'id': id,
         'gn-label': args.gn_label,
+        'output-category': args.output_category,
         'tags': tags,
         'deps': map(lambda i: i.json, sorted(list(deps))),
         'package-deps': map(lambda i: i.json, sorted(list(all_package_deps))),

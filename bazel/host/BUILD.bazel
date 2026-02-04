@@ -1,0 +1,86 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+
+genrule(
+    name = "qemu",
+    srcs = [
+        "@third_party_qemu//:all",
+        "@third_party_qemu//:ROOT",
+    ],
+    outs = ["qemu-x86_64-linux"],
+    cmd = """
+    srcdir="$$(dirname $$(realpath $(location @third_party_qemu//:ROOT)))"
+    dstdir="$$(realpath $@)"
+    outdir="$$(dirname $${dstdir})/build-qemu"
+
+    mkdir -p "$${outdir}"
+    pushd "$${outdir}"
+    $${srcdir}/configure \
+      --disable-gtk \
+      --enable-kvm \
+      --prefix="$${dstdir}" \
+      --target-list=aarch64-softmmu,x86_64-softmmu \
+      --disable-vnc-jpeg \
+      --disable-vnc-sasl \
+      --disable-vte \
+      --disable-docs \
+      --disable-curl \
+      --disable-debug-info \
+      --disable-qom-cast-debug \
+      --disable-guest-agent \
+      --disable-brlapi \
+      --disable-gnutls \
+      --disable-gcrypt \
+      --disable-nettle \
+      --enable-virtfs \
+      --disable-vhost-net \
+      --disable-libusb \
+      --disable-smartcard \
+      --disable-sdl \
+      --disable-sdl-image \
+      --disable-werror
+
+    make -j "$$(getconf _NPROCESSORS_ONLN)"
+    make install
+    popd
+    """,
+    local = True,
+)
+
+cc_binary(
+    name = "soc_term",
+    srcs = ["@soc_term//:sources"],
+    copts = [
+        "-g",
+        "-O0",
+    ],
+)
+
+genrule(
+    name = "syzkaller",
+    srcs = [
+        "@go_sdk//:all",
+        "@go_sdk//:ROOT",
+        "@third_party_syzkaller//:all",
+        "@third_party_syzkaller//:ROOT",
+    ],
+    outs = [
+        "syzkaller/bin/syz-manager",
+        "syzkaller/bin/linux_arm64/syz-fuzzer",
+    ],
+    cmd = """
+    export GOROOT="$$(dirname $$(realpath $(location @go_sdk//:ROOT)))"
+    export GOPATH="$$(realpath $(BINDIR)/syzkaller)"
+    export SYZKALLER_GOROOT=$${GOPATH}/src/github.com/google/syzkaller
+    export PATH=$${GOROOT}/bin:$${PATH}
+
+    mkdir -p $${GOPATH}
+    mkdir -p $${SYZKALLER_GOROOT}
+
+    SYZKALLER_PATH="$$(dirname $$(realpath $(location @third_party_syzkaller//:ROOT)))"
+    ln -sf $${SYZKALLER_PATH}/* "$${SYZKALLER_GOROOT}"
+    ln -sf $${SYZKALLER_PATH}/.git "$${SYZKALLER_GOROOT}"
+
+    make TARGETARCH=arm64 TARGETOS=linux SOURCEDIR=$${SYZKALLER_GOROOT} -C $${SYZKALLER_GOROOT}
+    """,
+    local = True,
+)

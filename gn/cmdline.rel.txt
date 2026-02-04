@@ -1,0 +1,3 @@
+devmgr.require-system=true
+crashlogger.disable=true
+netsvc.disable=true

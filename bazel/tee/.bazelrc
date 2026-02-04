@@ -1,0 +1,4 @@
+startup --output_base=../../out/.bazel-tee
+build --host_javabase=@local_jdk//:jdk
+build --incompatible_enable_cc_toolchain_resolution
+#build --sandbox_debug -s --toolchain_resolution_debug

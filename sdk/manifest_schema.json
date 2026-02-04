@@ -65,6 +65,10 @@
           "description": "Label of the GN target which generated the atom",
           "type": "string"
         },
+        "output-category": {
+          "description": "The category for outputing to SDK",
+          "type": "string"
+        },
         "files": {
           "description": "The files making up the atom",
           "type": "array",

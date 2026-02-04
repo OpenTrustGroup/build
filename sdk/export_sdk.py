@@ -46,6 +46,9 @@ def main():
     parser.add_argument('--old-school',
                         help='Turns the SDK into a big sysroot',
                         action='store_true')
+    parser.add_argument('--customized-folder',
+                        help='Turns the SDK into a customized folder',
+                        action='store_true')
     args = parser.parse_args()
 
     if len(args.domains) != 1 and args.domains[0] != 'cpp':
@@ -59,18 +62,29 @@ def main():
         manifest = json.load(manifest_file)
     atoms = filter(lambda a: a['id']['domain'] == 'cpp', manifest['atoms'])
 
-    def get_atom_dir(atom_name):
+    def get_atom_dir(atom_name, output_category):
         if args.old_school:
-            return os.path.join(args.out_dir, 'sysroot')
+            if args.customized_folder:
+                return os.path.join(args.out_dir, output_category)
+            else:
+                return os.path.join(args.out_dir, 'sysroot')
         else:
             return os.path.join(args.out_dir, 'pkg', atom_name)
 
     for atom in atoms:
-        dir = get_atom_dir(atom['id']['name'])
+        if 'output-category' in atom:
+            category = atom['output-category']
+        else:
+            category = ""
+        dir = get_atom_dir(atom['id']['name'], category)
         for file in atom['files']:
+            source = file['source']
             destination = os.path.join(dir, file['destination'])
             make_dir(destination)
-            shutil.copyfile(file['source'], destination)
+            if os.path.isdir(source):
+                shutil.copytree(source, destination, symlinks = True)
+            else:
+                shutil.copy2(source, destination)
 
     with open(args.depfile, 'w') as dep_file:
         dep_file.write('%s:\n' % args.depname)

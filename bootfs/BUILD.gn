@@ -1,9 +1,11 @@
+# Copyright 2018 GoldenRiver Technologies Co., Ltd. All rights reserved.
 # Copyright 2018 The Fuchsia Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import("//build/config/fuchsia/bootdata.gni")
 import("//build/gn/config.gni")
+import("//build/gn/finalize_manifests.gni")
 import("//build/package.gni")
 
 declare_args() {
@@ -16,54 +18,354 @@ declare_args() {
 # Mark as testonly to be able to depend on //build/gn:* targets.
 testonly = true
 
-# Package up the /system filesystem.
-bootdata("system_bootfs") {
-  assert(bootfs_packages,
-         "bootfs_packages=true required for /system bootfs images")
+# IMG1 = MDI + BOOTFS(/boot) + CMDLINE + BOOTFS(/system)
+template("bootdata_fs") {
+  forward_variables_from(invoker,
+                         [
+                           "deps",
+                           "exclude_boot_pkgs",
+                           "exclude_system_pkgs",
+                         ])
 
+  tgt_dbg = target_name + "-${invoker.product}"
+  tgt_rel = target_name + "-${invoker.product}-rel"
+
+  tgt_cmdline_plat = "cmdline_${target_name}-${invoker.product}"
+
+  # DEBUG finalize_manifests
+  finalize_manifests_template("finalize_manifests_" + tgt_dbg) {
+    is_release = false
+    final_release_groups = "all"
+    final_boot_manifest = final_boot_manifest + ".${tgt_dbg}"
+    final_system_manifest = final_system_manifest + ".${tgt_dbg}"
+    final_build_id_file = "$root_out_dir/ids.txt.${tgt_dbg}"
+    final_archive_manifest = "final_archive_manifest_${tgt_dbg}"
+    final_package_manifest = "final_package_manifest_${tgt_dbg}"
+  }
+
+  # RELEASE finalize_manifests
+  finalize_manifests_template("finalize_manifests_" + tgt_rel) {
+    is_release = true
+    final_release_groups = ""
+    final_boot_manifest = final_boot_manifest + ".${tgt_rel}"
+    final_system_manifest = final_system_manifest + ".${tgt_rel}"
+    final_build_id_file = "$root_out_dir/ids.txt.${tgt_rel}"
+    final_archive_manifest = "final_archive_manifest_${tgt_rel}"
+    final_package_manifest = "final_package_manifest_${tgt_rel}"
+    deps += [
+      ":finalize_manifests_" + tgt_dbg,
+
+      # finalize_manifest.py modify binaries used by mkbootfs, add
+      # deps to ensure release one starts after debug one was done.
+      ":system_bootfs_" + tgt_dbg,
+    ]
+  }
+
+  bootdata_cmdline(tgt_cmdline_plat) {
+    visibility = [ "//build/*" ]
+    inputs = [
+      "//vendor/grt/third_party/${invoker.target_name}/${invoker.product}/cmdline.txt",
+    ]
+  }
+
+  # Package up the /system filesystem.
+  bootdata("system_bootfs_" + tgt_dbg) {
+    assert(bootfs_packages,
+           "bootfs_packages=true required for /system bootfs images")
+
+    deps += [ ":finalize_manifests_" + tgt_dbg ]
+    inputs = [
+      final_system_manifest + ".${tgt_dbg}",
+    ]
+  }
+
+  # Package up the /system filesystem, but w/o those tagged by {misc,test}.
+  bootdata("system_bootfs_" + tgt_rel) {
+    assert(bootfs_packages,
+           "bootfs_packages=true required for /system bootfs images")
+
+    deps += [
+      ":finalize_manifests_" + tgt_dbg,
+      ":finalize_manifests_" + tgt_rel,
+      ":system_bootfs_" + tgt_dbg,
+    ]
+    inputs = [
+      final_system_manifest + ".${tgt_rel}",
+    ]
+  }
+
+  bootdata("boot_bootfs_" + tgt_dbg) {
+    boot = true
+    deps += [
+      ":finalize_manifests_" + tgt_dbg,
+      "//build/gn:cmdline",
+      ":${tgt_cmdline_plat}",
+    ]
+    inputs = [
+      "$zircon_build_dir/${invoker.target_name}-mdi.bin",
+      "${root_build_dir}/boot.manifest." + tgt_dbg,
+      "$root_out_dir/cmdline.bin",
+      "$root_out_dir/${tgt_cmdline_plat}.bin",
+    ]
+
+    # TODO: support kernel_cmdline_file
+  }
+
+  bootdata("boot_bootfs_" + tgt_rel) {
+    boot = true
+    deps += [
+      ":finalize_manifests_" + tgt_dbg,
+      ":finalize_manifests_" + tgt_rel,
+      "//build/gn:cmdline.rel",
+      ":${tgt_cmdline_plat}",
+    ]
+    inputs = [
+      "$zircon_build_dir/${invoker.target_name}-mdi.bin",
+      "${root_build_dir}/boot.manifest." + tgt_rel,
+      "$root_out_dir/cmdline.rel.bin",
+      "$root_out_dir/${tgt_cmdline_plat}.bin",
+    ]
+
+    # TODO: support kernel_cmdline_file
+  }
+
+  # Pack up MDI + DBG-BOOTFS(/boot) + CMDLINE + DBG-BOOTFS(/system)
+  bootdata("bootdata-fs-" + tgt_dbg) {
+    deps += [
+      ":boot_bootfs_" + tgt_dbg,
+      ":system_bootfs_" + tgt_dbg,
+    ]
+    inputs = get_target_outputs(":boot_bootfs_" + tgt_dbg)
+    inputs += get_target_outputs(":system_bootfs_" + tgt_dbg)
+  }
+
+  # Pack up MDI + REL-BOOTFS(/boot) + CMDLINE + REL-BOOTFS(/system)
+  bootdata("bootdata-fs-" + tgt_rel) {
+    deps += [
+      ":boot_bootfs_" + tgt_rel,
+      ":system_bootfs_" + tgt_rel,
+      ":bootdata-fs-" + tgt_dbg,
+    ]
+    inputs = get_target_outputs(":boot_bootfs_" + tgt_rel)
+    inputs += get_target_outputs(":system_bootfs_" + tgt_rel)
+  }
+}
+
+# IMG2 = PLID
+template("bootdata_plid") {
+  plid_list = [
+    "bootdata-plid-" + target_name + "-${invoker.product}",
+    "bootdata-plid-" + target_name + "-${invoker.product}-rel",
+  ]
+  foreach(plid, plid_list) {
+    bootdata_platform(plid) {
+      vid = invoker.vid
+      pid = invoker.pid
+      board = invoker.product
+    }
+  }
+}
+
+# IMG3 = IMG1 + IMG2 + SHIM
+template("bootdata_combo") {
+  suffix_dbg = "-" + target_name + "-${invoker.product}"
+  suffix_rel = "-" + target_name + "-${invoker.product}-rel"
+
+  bootdata("bootdata-combo" + suffix_dbg) {
+    deps = [
+      ":bootdata-fs" + suffix_dbg,
+      ":bootdata-plid" + suffix_dbg,
+    ]
+    inputs = [
+      "$zircon_build_dir/zircon.bin",
+    ]
+    foreach(label, deps) {
+      inputs += get_target_outputs(label)
+    }
+    header = "$zircon_build_dir/${invoker.target_name}-boot-shim.bin"
+    header_align = "65536"
+
+    if (kernel_cmdline_file != "") {
+      deps += [ ":extra_cmdline" ]
+      inputs += get_target_outputs(":extra_cmdline")
+    }
+  }
+  bootdata("bootdata-combo" + suffix_rel) {
+    deps = [
+      ":bootdata-fs" + suffix_rel,
+      ":bootdata-plid" + suffix_rel,
+    ]
+    inputs = [
+      "$zircon_release_build_dir/zircon.bin",
+    ]
+    foreach(label, deps) {
+      inputs += get_target_outputs(label)
+    }
+    header = "$zircon_build_dir/${invoker.target_name}-boot-shim.bin"
+    header_align = "65536"
+
+    if (kernel_cmdline_file != "") {
+      deps += [ ":extra_cmdline" ]
+      inputs += get_target_outputs(":extra_cmdline")
+    }
+  }
+
+  foreach(suffix,
+          [
+            suffix_dbg,
+            suffix_rel,
+          ]) {
+    action("bootdata-combo" + suffix + "-signed") {
+      deps = [
+        ":bootdata-combo" + suffix,
+      ]
+      script =
+          "//build/grt/${invoker.target_name}/${invoker.target_name}-sign.sh"
+      inputs = get_target_outputs(":bootdata-combo" + suffix)
+      bootdata_combo_unsigned = inputs[0]
+      bootdata_combo_signed = "${root_build_dir}/$target_name.bin"
+      args = [
+        "${invoker.target_name}",
+        "${invoker.product}",
+        rebase_path(bootdata_combo_unsigned, root_out_dir),
+        rebase_path(bootdata_combo_signed, root_out_dir),
+      ]
+      outputs = [
+        bootdata_combo_signed,
+      ]
+    }
+  }
+}
+
+# TODO: Define templates and remove third party stuffs when
+# visibility issue of //build/gn:finalize_manifests solved.
+import("//build/grt/BUILD.nbl_tsm_server.generated.gni")
+action("nbl_tsm_server") {
+  inputs = nbl_tsm_server_sources
+  script = "//build/grt/build_secmgr_tsm.sh"
+  output_dir = "$root_out_dir/secmgr"
+  outputs = [
+    "$output_dir",
+  ]
   deps = [
     "//build/gn:finalize_manifests",
+    "//garnet/public/nebula_sdk:nebula_export",
+    "//third_party/hee-trusty/nbl_attest_srv:nbl_attest_srv",
   ]
-  inputs = [
-    final_system_manifest,
+}
+
+# TODO: Define templates and remove third party stuffs.
+import("//build/grt/BUILD.nbl_license_tool.generated.gni")
+action("nebula_license_tool") {
+  inputs = nbl_license_tool_sources
+  script = "//build/grt/build_license_tool.sh"
+
+  # HACK: simply use far to deternmine output dir of host tools
+  output_dir = get_label_info("//garnet/bin/far:bin($host_toolchain)",
+                              "root_out_dir") + "/$target_name"
+  output_bin = "$output_dir/$target_name.jar"
+  outputs = [
+    output_bin,
   ]
+  args = [
+    rebase_path("//third_party/nbl_license_tool", root_out_dir),
+    rebase_path(output_dir, "//third_party/nbl_license_tool"),
+  ]
+}
+
+template("bootdata_license") {
+  tool = "//out/${zircon_project}/arm64/host_x64/nebula_license_tool/nebula_license_tool.jar"
+  key = "//third_party/nbl_license_tool/key/nebula_license_privatekey.pem"
+  target_name_final = "bootdata-license-" + target_name + "-${invoker.product}"
+  action(target_name_final) {
+    deps = [
+      ":nebula_license_tool",
+    ]
+    inputs = []
+    script = "/usr/bin/java"
+    inputs += [
+      tool,
+      key,
+    ]
+    output_bin = "$root_out_dir/" + target_name_final + ".bin"
+    outputs = [
+      output_bin,
+    ]
+    args = [
+      "-jar",
+      rebase_path(tool, root_build_dir),
+      "sign",
+      "--in_data",
+      "${invoker.vid}${invoker.pid}${invoker.product}",
+      "--out_file_path",
+      rebase_path(output_bin, root_build_dir),
+      "--sign_private_key_pem_path",
+      rebase_path(key, root_build_dir),
+    ]
+  }
+}
+
+# TODO(GR): Support cmdline customization.
+# NOTE(GR): The target_name of makecombo should be one of zircon board names.
+template("makecombo") {
+  assert(defined(invoker.product), "product must defined!")
+  assert(defined(invoker.vid), "vid must defined!")
+  assert(defined(invoker.pid), "pid must defined!")
+  forward_variables_from(invoker,
+                         [
+                           "deps",
+                           "exclude_boot_pkgs",
+                           "exclude_system_pkgs",
+                         ])
+
+  product = invoker.product
+  vid = invoker.vid
+  pid = invoker.pid
+
+  # IMG1 = MDI + BOOTFS(/boot) + CMDLINE
+  bootdata_fs(target_name) {
+  }
+
+  # IMG2 = PLID
+  bootdata_plid(target_name) {
+  }
+
+  # IMG3 = IMG1 + IMG2 + SHIM
+  bootdata_combo(target_name) {
+  }
+
+  # LICENSE = SIGNATURE(VID+PID+BOARDNAME)
+  bootdata_license(target_name) {
+  }
 }
 
 # DEPRECATED
 # Roll those together into the image for booting with /system from RAM disk.
-bootdata("mkbootfs") {
-  output_name = "user"
-  output_extension = "bootfs"
+
+# NOTE(makecombo): since GN doesn't have static vars, we need to setup dependency (deps) manually.
+# PLEASE follow the depedency rule below: qemu <- cepheus <- p60 <- p80 <- new-board
+# PLEASE follow the depedency rule below: qemu <- cepheus <- p60 <- p80 <- new-board
+# PLEASE follow the depedency rule below: qemu <- cepheus <- p60 <- p80 <- new-board
+makecombo("qemu") {
+  product = "virt"  # "ro.product.name"
+  vid = "1"
+  pid = "1"
   deps = [
-    ":system_bootfs",
+    "//build/gn:finalize_manifests",
+    "//build/gn:finalize_manifests_rel",
   ]
-  inputs = []
-  foreach(label, deps) {
-    inputs += get_target_outputs(label)
-  }
-
-  # XXX(TO-848): as this is deprecated, for now we will build only an x86 or a
-  # qemu image to avoid renaming files that are in SDK etc, but also to to
-  # support ARM unikernel.
-  if (target_cpu == "x64") {
-    bootdata_label = "//build/gn:bootdata-pc"
-  } else {
-    bootdata_label = "//build/gn:bootdata-qemu"
-  }
-
-  extra_input_labels = [ bootdata_label ] + extra_bootdata
-  deps += extra_input_labels
-
-  foreach(label, extra_input_labels) {
-    # get_target_outputs only works on labels defined in the same file.
-    # So just assume each `bootdata` target used the defaults so its
-    # output file is computable directly from the target name.
-    inputs += [ "$root_out_dir/" + get_label_info(label, "name") + ".bin" ]
-  }
 }
 
 group("bootfs") {
+  # Combos
   deps = [
-    ":mkbootfs",
+    ":bootdata-combo-qemu-virt",
+    ":bootdata-combo-qemu-virt-rel",
   ]
+
+  # Licenses
+  deps += [ ":bootdata-license-qemu-virt" ]
+
+  # Others
+  deps += [ ":nbl_tsm_server" ]
 }

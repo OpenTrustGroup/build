@@ -59,6 +59,20 @@ template("bootdata") {
     target_args = []
   }
 
+  # NOTE(GRT): for combo image which header=bootshim, header_align=65536
+  if (defined(invoker.header) && invoker.header != "") {
+    target_args += [
+      "--header",
+      rebase_path(invoker.header, root_build_dir),
+    ]
+    if (defined(invoker.header_align) && invoker.header_align != "") {
+      target_args += [
+        "--header-align",
+        invoker.header_align,
+      ]
+    }
+  }
+
   zircon_tool_action(target_name) {
     forward_variables_from(invoker,
                            [

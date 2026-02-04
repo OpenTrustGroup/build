@@ -1,7 +1,7 @@
 <%include file="header.mako" />
 
 import("//build/gn/config.gni")
-import("//build/sdk/sdk_atom.gni")
+import("//build/nebula/nbl_sdk_library.gni")
 
 config("${data.name}_config") {
   include_dirs = [
@@ -111,16 +111,15 @@ group("${data.name}") {
 
 }  # !toolchain_variant.is_pic_default
 
-sdk_atom("${data.name}_sdk") {
-  domain = "cpp"
+nbl_sdk_library("${data.name}_sdk") {
   name = "${data.name}"
-
-  tags = [
-    "type:compiled_shared",
-    "arch:target",
-  ]
+  category = "hee"
 
   shared_out_dir = get_label_info(":bogus($shlib_toolchain)", "root_out_dir")
+
+  libs = [
+    "${data.lib_name}",
+  ]
 
   files = [
     % if data.with_sdk_headers:
@@ -157,7 +156,7 @@ sdk_atom("${data.name}_sdk") {
     % endfor
   ]
 
-  non_sdk_deps = [
+  deps = [
     ":${data.name}",
   ]
 }

@@ -8,9 +8,15 @@ import("//build/config/sysroot.gni")
 import("//build/gn/config.gni")
 import("//build/toolchain/ccache.gni")
 
+# GoldenRiverTek specific configs
+import("//build/grt/config.gni")
+
 assert(current_os == "fuchsia")
 
 config("werror") {
+  # NOTE(GRT): the reason of switching Werror on and off by using ccache
+  # is unclear, but enable Werror for all stuffs in garnet layer did cause
+  # many build errors of third-party libraries such as sqlite.
   if (!use_ccache) {
     cflags = [
       "-Werror",
@@ -22,6 +28,12 @@ config("werror") {
 
       # Do not add additional -Wno-error to this config.
     ]
+  } else {
+    # NOTE(GRT): In order to detect the issue of using port_create/close style
+    # trusty syscalls but indeed links to zircon libc library (VSCRUM-353),
+    # i.e., syscalls naming conflicts problem, for app/lib uses these syscalls
+    # w/o explicitly defined ENABLE_TRUSTY_DEPRECATED_SYSCALL, raise build error.
+    cflags = [ "-Werror=implicit-function-declaration" ]
   }
 }
 
@@ -73,9 +85,9 @@ config("toolchain_version_stamp") {
   # artifacts from an older version of the toolchain may or may not be compatible with newer ones.
   # To achieve this, we insert a synthetic define into the compile line.
   cipd_version = read_file(
-          "//buildtools/${host_platform}/clang/.versions/clang.cipd_version",
-          "json")
-  defines = [ "TOOLCHAIN_VERSION=${cipd_version.instance_id}" ]
+          "//buildtools/${host_platform}/clang.stamp",
+          "list lines")
+  defines = [ "TOOLCHAIN_VERSION=${cipd_version[0]}" ]
 }
 
 config("compiler_sysroot") {
@@ -136,4 +148,27 @@ config("zircon_asserts") {
   if (zircon_asserts) {
     configs = [ ":enable_zircon_asserts" ]
   }
+}
+
+config("static_cpp_standard_library") {
+  ldflags = [
+    # Use libc++ as the C++ standard library.
+    "-stdlib=libc++",
+
+    # Use libunwind as the unwinder.
+    "-unwindlib=libunwind",
+
+    # Request static linking for standard C++ library. Despite the name, this
+    # option applies to both libstdc++ and libc++, whichever is used by Clang.
+    "-static-libstdc++",
+
+    # Request static linking for unwinder. Despite the name, this option
+    # applies to both libgcc and libunwind, whichever is used by Clang.
+    "-static-libgcc",
+  ]
+
+  # -static-libstdc++ and -static-libgcc options are handled by the C++
+  # compiler driver (that is clang), whereas these link-args get passed
+  # straight to lld by rustc and need to be expanded manually.
+  # rustflags = [ "-Clink-args=--push-state -Bstatic -lc++ -Bdynamic -lm --pop-state -l:libunwind.a" ]
 }

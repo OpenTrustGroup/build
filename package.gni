@@ -83,6 +83,15 @@ declare_args() {
 #       dest (path, optional)
 #         Location the binary will be placed within "bin/"
 #
+#       in_image (string, optional)
+#          GRT:The image type maybe is release/debug (ex: "debug,release" is in "release" and "debug" image).
+#          If unset, the value is all. The binary file will be put in the given image.
+#          If "!" is at begin of string, the select is inversed (ex: "!debug", then in all images except "debug").
+#
+#   vendor_binaries (optional)
+#     List of scopes defining the vendor binaries in the package. A vendor binary is typically
+#     produced by vendor and it's a prebuilt binary or a configuration file.
+#
 #   tests (optional)
 #     List of scopes defining the test binaries in the package. A test is
 #     typically produced by the build system and is placed in the "test/"
@@ -95,6 +104,9 @@ declare_args() {
 #
 #       dest (path, optional)
 #         Location the binary will be placed within "test/"
+#
+#       destdir (dir, optional)
+#         Location the binary will be placed within "test/dir/"
 #
 #       disabled (bool, optional)
 #         Whether to disable the test on continuous integration jobs. This can
@@ -153,6 +165,9 @@ declare_args() {
 #   extra (optional)
 #     A list of potentially build-time generated files containing extra entries
 #     in the package, formatted as a manifest.
+#
+#   destdir (dir, optional)
+#     Location the package/far will be placed within "system/dir/".
 template("package") {
   if (current_toolchain == target_toolchain) {
     pkg = {
@@ -163,6 +178,7 @@ template("package") {
       system_image = false
       boot_firmware_image = false
       binaries = []
+      vendor_binaries = []
       drivers = []
       libraries = []
       meta = []
@@ -170,6 +186,7 @@ template("package") {
       package_version = "0"  # placeholder
       resources = []
       tests = []
+      destdir = "pkgs"
       forward_variables_from(invoker, "*")
     }
     pkg_out_dir = "$root_build_dir/package/${pkg.package_name}"
@@ -274,8 +291,32 @@ template("package") {
       if (defined(binary.dest)) {
         basename = binary.dest
       }
-      contents += [ "$dirname/$basename=$source" ]
+
+      # GRT: The binary which has flag "in_image" referring which image should be put in.
+      #      If set, add "[<in_image>]" at the begin of content. The possible options are "release" and "debug".
+      #      If not set, add nothing. The binary will be put in all images.
+      if (defined(binary.in_image)) {
+        in_image = binary.in_image
+        contents += [ "[$in_image]$dirname/$basename=$source" ]
+      } else {
+        contents += [ "$dirname/$basename=$source" ]
+      }
       extra_inputs += [ source ]
+    }
+    foreach(vendor_binary, pkg.vendor_binaries) {
+      assert(
+          pkg.system_image,
+          "Binaries cannot be used in archived packages. Consider using 'binary'.")
+      assert(defined(vendor_binary.source), "source must be defined")
+      assert(defined(vendor_binary.name), "name must be defined")
+      source = vendor_binary.source
+      if (defined(vendor_binary.dirname)) {
+        dirname = vendor_binary.dirname
+      } else {
+        dirname = "vendor/bin"
+      }
+      basename = vendor_binary.name
+      contents += [ "$dirname/$basename=$source" ]
     }
     foreach(test, pkg.tests) {
       source = rebase_path("$root_build_dir/${test.name}")
@@ -283,12 +324,18 @@ template("package") {
       if (defined(test.dest)) {
         basename = test.dest
       }
+      if (defined(test.destdir)) {
+        basename = test.destdir + "/" + basename
+      }
       if (defined(test.disabled) && test.disabled) {
         dest = "test/disabled/" + basename
       } else {
         dest = "test/" + basename
       }
-      contents += [ "$dest=$source" ]
+
+      # Add {test} tag for these tests so they can be properly
+      # handled in finalize_manifest.py.
+      contents += [ "{test}$dest=$source" ]
       extra_inputs += [ source ]
     }
     foreach(driver, pkg.drivers) {
@@ -296,7 +343,12 @@ template("package") {
       source = rebase_path("$root_build_dir/${driver.name}")
       dest = "driver/" + driver.name
 
-      contents += [ "$dest=$source" ]
+      # GRT: Only save the binary into system image, not archive, set the "{test}".
+      if (defined(pkg.testonly) && pkg.testonly && pkg.system_image) {
+        contents += [ "{test}$dest=$source" ]
+      } else {
+        contents += [ "$dest=$source" ]
+      }
       extra_inputs += [ source ]
     }
     foreach(library, pkg.libraries) {
@@ -312,7 +364,13 @@ template("package") {
       } else {
         dest = "lib/" + library.name
       }
-      contents += [ "$dest=$source" ]
+
+      # GRT: Only save the binary into system image, not archive, set the "{test}".
+      if (defined(pkg.testonly) && pkg.testonly && pkg.system_image) {
+        contents += [ "{test}$dest=$source" ]
+      } else {
+        contents += [ "$dest=$source" ]
+      }
       extra_inputs += [ source ]
     }
     foreach(resource, pkg.resources) {
@@ -323,7 +381,12 @@ template("package") {
       } else {
         dest = "data/" + resource.dest
       }
-      contents += [ "$dest=$source" ]
+      # GRT: Only save the binary into system image, not archive, set the "{test}".
+      if (defined(pkg.testonly) && pkg.testonly && pkg.system_image) {
+        contents += [ "{test}$dest=$source" ]
+      } else {
+        contents += [ "$dest=$source" ]
+      }
       extra_inputs += [ source ]
     }
 
@@ -452,6 +515,11 @@ template("package") {
       }
     } else {
       output = "$pkg_out_dir/${pkg.package_name}.far"
+      if (defined(pkg.testonly) && pkg.testonly) {
+        pkg_group = "{test}"
+      } else {
+        pkg_group = ""
+      }
 
       action(manifest_target_name) {
         script = "//build/gn/write_manifest.py"
@@ -466,7 +534,7 @@ template("package") {
                  rebase_path(partial_package_manifest, root_build_dir),
                  "--manifest",
                  rebase_path(system_manifest, root_build_dir),
-                 "pkgs/${pkg.package_name}=" + rebase_path(output),
+                 "${pkg_group}${pkg.destdir}/${pkg.package_name}=" + rebase_path(output),
                  "--manifest",
                  rebase_path(boot_manifest, root_build_dir),
                  "--manifest",

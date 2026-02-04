@@ -1,0 +1,642 @@
+package(default_visibility = ["@ree//:ree_trusty_group"])
+
+load(":utils.bzl", "copy_single_file", "build_linux_image")
+
+genrule(
+    name = "gen_init_cpio_x64",
+    srcs = ["@linux_4.9//:gen_init_cpio.c"],
+    outs = ["gen_init_cpio"],
+    cmd = "gcc -o $@ $<",
+)
+
+constraint_setting(name = "linux_version")
+build_linux_image("4.9")
+build_linux_image("4.19")
+build_linux_image("5.4")
+build_linux_image("6.6")
+
+# TODO: Enable back when linux kernel coverage is needed.
+# genrule(
+#     name = "linux-image-kcov",
+#     srcs = [
+#         "@linux//:all",
+#         "@linux//:merge_config",
+#         "@linux//:ROOT",
+#         "@scripts//:qemu_kcov_config",
+#     ],
+#     outs = [
+#         "linux-kcov/.config",
+#         "linux-kcov/vmlinux",
+#         "linux-kcov/arch/arm64/boot/Image",
+#     ],
+#     cmd = """
+#     ARCH=arm64
+#     LINUX_SRC=$$(dirname $$(realpath $(location @linux//:ROOT)))
+#     QEMU_CFG=$$(realpath $(location @scripts//:qemu_kcov_config))
+#     ARM64_CFG=arch/arm64/configs/defconfig
+#     LINUX_OUT=$$(realpath $(BINDIR)/linux-kcov)
+#     if [[ -n "$${CCACHE_DIR}" ]] && [[ -d "$${CCACHE_DIR}" ]]; then
+#       CROSS_COMPILE="$$(which ccache) $${GCC_TOOLCHAIN_PREFIX}/aarch64-linux-gnu-"
+#     else
+#       CROSS_COMPILE="$${GCC_TOOLCHAIN_PREFIX}/aarch64-linux-gnu-"
+#     fi
+#     echo "CROSS_COMPILE: $${CROSS_COMPILE}"
+#
+#     mkdir -p $${LINUX_OUT}
+#     cd $${LINUX_SRC} && ARCH=$${ARCH} scripts/kconfig/merge_config.sh -O $${LINUX_OUT} $${ARM64_CFG} $${QEMU_CFG}
+#     make CROSS_COMPILE="$${CROSS_COMPILE}" ARCH=$${ARCH} TEXT_OFFSET=0x10000 'KCFLAGS="-Werror"' \
+#         LOCALVERSION= O=$${LINUX_OUT} -j$$(getconf _NPROCESSORS_ONLN) V=0
+#     """,
+#     local = True,
+# )
+
+genrule(
+    name = "generate-cpio-rootfs",
+    srcs = [
+        ":gen_init_cpio_x64",
+        "@gen_rootfs//:all",
+        "@gen_rootfs//:ROOT",
+        "@busybox//:all",
+        "@busybox//:ROOT",
+    ],
+    outs = ["gen_root/filelist-final.txt"],
+    cmd = """
+    export PATH=$${PATH}:$$(dirname $$(realpath $(location :gen_init_cpio_x64)))
+    export BUSYBOX_PATH=$$(dirname $$(realpath $(location @busybox//:ROOT)))
+    export ROOTFS_SRC=$$(dirname $$(realpath $(location @gen_rootfs//:ROOT)))
+    export ROOTFS_BUILDROOT=$$(realpath $(@D))
+    if [[ -n "$${CCACHE_DIR}" ]] && [[ -d "$${CCACHE_DIR}" ]]; then
+      export CROSS_COMPILE="$$(which ccache) $${GCC_TOOLCHAIN_PREFIX}/aarch64-linux-gnu-"
+    else
+      export CROSS_COMPILE="$${GCC_TOOLCHAIN_PREFIX}/aarch64-linux-gnu-"
+    fi
+    echo "CROSS_COMPILE: $${CROSS_COMPILE}"
+
+    mkdir -p $${ROOTFS_BUILDROOT}
+    cd $${ROOTFS_SRC} && ./generate-cpio-rootfs.sh fvp
+    """,
+    local = True,
+)
+
+genrule(
+    name = "linux-rootfs",
+    srcs = [
+        ":gen_init_cpio_x64",
+        ":generate-cpio-rootfs",
+        "@ree//nblruncmd",
+        "@ree//nbl_secmgr_agent",
+        "@ree//nbl_daemon",
+        "@ree//nbl_daemon:keystore",
+        "@ree//nbl_daemon:hyp_nbl_daemon",
+        "@ree//:dropbear",
+        "@ree//:socat",
+        "@ree//:iperf3",
+        "@ree//nblmsg",
+        "@ree//nbl_benchmarks",
+        "@ree//libnbl_loader_ree/tests:ta-loader_test",
+        "@ree//libnbl_license_ree/tests:ta-license_test",
+        "@ree//nbl_fwk_test",
+        "@ree//libnbl_secmgr_ree/tests:libnbl_secmgr_ree_test",
+        "@ree//libseccam-ipc:seccam-ipc",
+        "@ree//storage/proxy:nbl_storageproxyd",
+        "@ree//libtrusty/tipc-test",
+        "@ree//storage/tests:secure-storage-unit-test",
+        "@ree//storage/proxy:tee_launch_script",
+        "@ree//storage/proxy:hyp_launch_script",
+        "@ree//nbl_tui:launch_script",
+        "@ree//nbl_tui:nbl_tui_service",
+        "@ree//nbl_daemon:launch_script",
+        "@gcc//:libstdc++.so",
+        "@ree//nbl_tui/libnbl_ev:evtest",
+        "@ree//nbl_attestd",
+        "@ree//rprocd",
+        "@ree//libnbl_gp/tests/gp_echo_ca",
+        "@ree//libnbl_gp/tests/gp_ut_ca",
+        "@ree//ion_test",
+        "@ree//openssl:gen-linux-aarch64",
+        "@ree//nbl_rpcd",
+        "@scripts//:drmdevice",
+        "@scripts//:modetest",
+        "@scripts//:libdrm",
+        "@scripts//:libkms",
+        "@hee//:all",
+        "@hee//:ROOT",
+        "@fuchsia_out//:all",
+        "@fuchsia_out//:ROOT",
+        "@syzkaller_nbl//:syz-manager",
+        "@syzkaller_nbl//:libmanager",
+        "@syzkaller_nbl//:libsyzmanagerrpc",
+    ],
+    outs = ["rootfs/filesystem.cpio.gz"],
+    cmd = """
+    export PATH=$${PATH}:$$(dirname $$(realpath $(location :gen_init_cpio_x64)))
+    export ROOTFS_BUILDROOT=$$(dirname $$(realpath $(location :generate-cpio-rootfs)))
+
+    export HEE_SRC=$$(realpath $$(dirname $(location @hee//:ROOT)))
+    export FUCHSIA_OUT=$$(realpath $$(dirname $(location @fuchsia_out//:ROOT)))
+
+    # Following packages have multiple outputs and need special handling
+    # cc_library
+    export LIB_SECCAM_IPC=($(locations @ree//libseccam-ipc:seccam-ipc))
+    # genrule
+    export SSH_OUT=($(locations @ree//:dropbear))
+    export SOCAT_OUT=($(locations @ree//:socat))
+    export IPERF_OUT=($(locations @ree//:iperf3))
+
+    _OUTS=($(locations @ree//openssl:gen-linux-aarch64))
+    _OUT_DIR="$${_OUTS[0]%/*}"
+    _OUT_DIR="$${_OUT_DIR%/openssl}"
+    _OUT_DIR="$${_OUT_DIR%/lib}"
+    _OUT_DIR="$${_OUT_DIR%/include}"
+    export LIB_OPENSSL_OUT_DIR="$$(realpath $${_OUT_DIR})"
+
+    mkdir -p $(@D)
+    ln -sf $${ROOTFS_BUILDROOT}/* $(@D)/
+
+    cat $(@D)/filelist-final.txt > $(@D)/filelist.tmp
+    cat >> $(@D)/filelist.tmp << EOF
+# filelist-tee-common /start
+file /bin/hello.ha $${HEE_SRC}/samples/uuid_svr/hello.ha 755 0 0
+file /bin/uuid_svr.far $${FUCHSIA_OUT}/package/uuid_svr/uuid_svr.far 755 0 0
+file /bin/uuid_cli_far.far $${FUCHSIA_OUT}/package/uuid_cli_far/uuid_cli_far.far 755 0 0
+file /bin/uuid_cli.un $${FUCHSIA_OUT}/uuid_cli 755 0 0
+file /bin/uuid_cli $${FUCHSIA_OUT}/uuid_cli.nu 755 0 0
+file /bin/ta_big.un $${FUCHSIA_OUT}/exe.unstripped/ta_big 755 0 0
+file /bin/ta_big $${FUCHSIA_OUT}/ta_big 755 0 0
+file /bin/nbl_secmgr_agent $$(realpath $(location @ree//nbl_secmgr_agent:nbl_secmgr_agent)) 755 0 0
+file /bin/nbl_daemon $$(realpath $(location @ree//nbl_daemon:nbl_daemon)) 755 0 0
+file /bin/hyp_nbl_daemon $$(realpath $(location @ree//nbl_daemon:hyp_nbl_daemon)) 755 0 0
+file /bin/nblmsg $$(realpath $(location @ree//nblmsg:nblmsg)) 755 0 0
+file /bin/nbl_benchmarks $$(realpath $(location @ree//nbl_benchmarks:nbl_benchmarks)) 755 0 0
+file /bin/ta-loader_test $$(realpath $(location @ree//libnbl_loader_ree/tests:ta-loader_test)) 755 0 0
+file /bin/ta-license_test $$(realpath $(location @ree//libnbl_license_ree/tests:ta-license_test)) 755 0 0
+file /bin/libnbl_secmgr_ree_test $$(realpath $(location @ree//libnbl_secmgr_ree/tests:libnbl_secmgr_ree_test)) 755 0 0
+file /lib/libseccam-ipc.so $$(realpath $$(dirname $${LIB_SECCAM_IPC[0]})/libseccam-ipc.so) 755 0 0
+file /bin/nbl_storageproxyd $$(realpath $(location @ree//storage/proxy:nbl_storageproxyd)) 755 0 0
+file /bin/secure-storage-unit-test $$(realpath $(location @ree//storage/tests:secure-storage-unit-test)) 755 0 0
+file /bin/start_tee_proxyd $$(realpath $(location @ree//storage/proxy:tee_launch_script)) 755 0 0
+file /bin/start_hyp_proxyd $$(realpath $(location @ree//storage/proxy:hyp_launch_script)) 755 0 0
+file /bin/start_nbl_daemon $$(realpath $(location @ree//nbl_daemon:launch_script)) 755 0 0
+file /bin/inject_secmgr_keystore $$(realpath $(location @ree//nbl_daemon:keystore)) 755 0 0
+file /bin/nblruncmd $$(realpath $(location @ree//nblruncmd:nblruncmd)) 755 0 0
+file /bin/start_tui_service $$(realpath $(location @ree//nbl_tui:launch_script)) 755 0 0
+file /bin/nbl_tui_service $$(realpath $(location @ree//nbl_tui:nbl_tui_service)) 755 0 0
+file /bin/ion_test $$(realpath $(location @ree//ion_test:ion_test)) 755 0 0
+file /lib/libstdc++.so.6.0.24 $$(realpath $(location @gcc//:libstdc++.so)) 755 0 0
+file /bin/dropbear $$(realpath $${SSH_OUT})/sbin/dropbear 755 0 0
+file /bin/scp $$(realpath $${SSH_OUT})/bin/scp 755 0 0
+file /bin/socat $$(realpath $${SOCAT_OUT})/socat 755 0 0
+file /bin/iperf3 $$(realpath $${IPERF_OUT})/bin/iperf3 755 0 0
+file /bin/evtest $$(realpath $(location @ree//nbl_tui/libnbl_ev:evtest)) 755 0 0
+file /bin/nbl_attestd $$(realpath $(location @ree//nbl_attestd:nbl_attestd)) 755 0 0
+file /bin/rprocd $$(realpath $(location @ree//rprocd:rprocd)) 755 0 0
+file /bin/nbl_rpcd $$(realpath $(location @ree//nbl_rpcd:nbl_rpcd)) 755 0 0
+file /bin/gp_echo_ca $$(realpath $(location @ree//libnbl_gp/tests/gp_echo_ca:gp_echo_ca)) 755 0 0
+file /bin/gp_ut_ca $$(realpath $(location @ree//libnbl_gp/tests/gp_ut_ca:gp_ut_ca)) 755 0 0
+file /bin/syz-manager $$(realpath $(location @syzkaller_nbl//:syz-manager)) 755 0 0
+file /lib/libmanager.so $$(realpath $(location @syzkaller_nbl//:libmanager)) 755 0 0
+file /lib/libsyzmanagerrpc.so $$(realpath $(location @syzkaller_nbl//:libsyzmanagerrpc)) 755 0 0
+dir /data 755 0 0
+file /data/nblruncmd $$(realpath $(location @ree//nblruncmd:nblruncmd)) 755 0 0
+dir /root/ree 755 0 0
+dir /root/ree/secmgr_unit_test 755 0 0
+dir /root/ree/secmgr_unit_test/manual 755 0 0
+dir /root/ree/secmgr_unit_test/demo 755 0 0
+file /root/ree/bootdata-license-qemu-virt.bin $${FUCHSIA_OUT}/bootdata-license-qemu-virt.bin 755 0 0
+dir /root/ree/provision 755 0 0
+dir /root/ree/provision/secmgr_test_ree_ha2 755 0 0
+file /root/ree/provision/secmgr_test_ree_ha2/provision_create_sd.json $${FUCHSIA_OUT}/provision/secmgr_test_ree_ha2/provision_create_sd.json 666 0 0
+file /root/ree/provision/secmgr_test_ree_ha2/provision_get_device_state.json $${FUCHSIA_OUT}/provision/secmgr_test_ree_ha2/provision_get_device_state.json 666 0 0
+file /root/ree/provision/secmgr_test_ree_ha2/provision_ha.json $${FUCHSIA_OUT}/provision/secmgr_test_ree_ha2/provision_ha.json 666 0 0
+dir /root/ree/provision/secmgr_test_ree_ha1 755 0 0
+file /root/ree/provision/secmgr_test_ree_ha1/provision_create_sd.json $${FUCHSIA_OUT}/provision/secmgr_test_ree_ha1/provision_create_sd.json 666 0 0
+file /root/ree/provision/secmgr_test_ree_ha1/provision_get_device_state.json $${FUCHSIA_OUT}/provision/secmgr_test_ree_ha1/provision_get_device_state.json 666 0 0
+file /root/ree/provision/secmgr_test_ree_ha1/provision_ha.json $${FUCHSIA_OUT}/provision/secmgr_test_ree_ha1/provision_ha.json 666 0 0
+dir /root/ree/provision/keystore 755 0 0
+file /root/ree/provision/keystore/hee_ca_cert $${HEE_SRC}/nbl_secmgr_srv/keystore/hee_ca_cert 666 0 0
+file /root/ree/provision/keystore/hee_cert $${HEE_SRC}/nbl_secmgr_srv/keystore/hee_cert 666 0 0
+file /root/ree/provision/keystore/hee_private_key $${HEE_SRC}/nbl_secmgr_srv/keystore/hee_private_key 666 0 0
+file /root/ree/provision/keystore/spaik_provision $${HEE_SRC}/nbl_secmgr_srv/keystore/spaik_provision 666 0 0
+file /root/ree/provision/keystore/tfw_cert $${HEE_SRC}/nbl_secmgr_srv/keystore/tfw_cert 666 0 0
+file /root/ree/provision/keystore/tfw_private_key $${HEE_SRC}/nbl_secmgr_srv/keystore/tfw_private_key 666 0 0
+file /root/ree/provision/keystore/tsm_root_cert $${HEE_SRC}/nbl_secmgr_srv/keystore/tsm_root_cert 666 0 0
+file /root/ree/provision/keystore/tsm_root_cert_other1 $${HEE_SRC}/nbl_secmgr_srv/keystore/tsm_root_cert_other1 666 0 0
+file /bin/drmdevice $$(realpath $(location @scripts//:drmdevice)) 755 0 0
+file /bin/modetest $$(realpath $(location @scripts//:modetest)) 755 0 0
+file /lib/libiperf.so.0.0.0 $$(realpath $${IPERF_OUT})/lib/libiperf.so.0.0.0 755 0 0
+slink /lib/libiperf.so.0 /lib/libiperf.so.0.0.0 755 0 0
+slink /lib/libiperf.so /lib/libiperf.so.0.0.0 755 0 0
+file /lib/libdrm.so.2.4.0 $$(realpath $(location @scripts//:libdrm)) 755 0 0
+slink /lib/libdrm.so.2 /lib/libdrm.so.2.4.0 755 0 0
+file /lib/libkms.so.1.0.0 $$(realpath $(location @scripts//:libkms)) 755 0 0
+slink /lib/libkms.so.1 /lib/libkms.so.1.0.0 755 0 0
+file /lib/libcrypto.so.1.1 $${LIB_OPENSSL_OUT_DIR}/lib/libcrypto.so 755 0 0
+slink /lib/libcrypto.so /lib/libcrypto.so.1.1 755 0 0
+slink /lib/libvmm.so /data/libvmm.so 755 0 0
+# filelist-tee-common /end
+EOF
+
+    pushd $(@D) > /dev/null
+    gen_init_cpio filelist.tmp | gzip > filesystem.cpio.gz
+    popd > /dev/null
+    """,
+    local = True,
+)
+
+genrule(
+    name = "nbl_otrp_sdk",
+    srcs = [
+        "@nbl_otrp_sdk//:all",
+        "@nbl_otrp_sdk//:ROOT",
+        "@ree//:ndk-build",
+        "@ree//uree/libgz_uree:arm64-v8a",
+        "@ree//libion:arm64-v8a",
+        "@ree//libion_mtk:arm64-v8a",
+        "@ree//libtrusty:headers",
+        "@ree//libnbl_fwk_ree:headers",
+        "@ree//libnbl_secmgr_ree:headers",
+        "@ree//libnbl_loader_ree:headers",
+    ],
+    outs = ["build-android-apps/nbl_otrp_sdk/outputs/apk/debug/app-debug.apk"],
+    cmd = """
+    NDK_OUT="$(locations @ree//:ndk-build)"
+    LIB_UREE="$(location @ree//uree/libgz_uree:arm64-v8a)"
+    SDK_ROOT="$$(dirname $(location @nbl_otrp_sdk//:ROOT))"
+    JNI_DIR="$${SDK_ROOT}/app/src/main/jni/jni_libs"
+
+    rm -rf $${JNI_DIR}/*
+
+    # fwk_ree & trusty
+    FWK_DIR="$${JNI_DIR}/nbl_fwk_ree"
+    FWK_OUT="$${FWK_DIR}/arm64-v8a"
+    TRUSTY_DIR="$${JNI_DIR}/trusty"
+    TRUSTY_OUT="$${TRUSTY_DIR}/arm64-v8a"
+    mkdir -p "$${FWK_OUT}"
+    mkdir -p "$${TRUSTY_OUT}"
+    cp $(location @ree//libnbl_loader_ree:headers) "$${FWK_DIR}"
+    cp $(location @ree//libnbl_secmgr_ree:headers) "$${FWK_DIR}"
+    cp $(locations @ree//libnbl_fwk_ree:headers) "$${FWK_DIR}"
+    cp $(locations @ree//libtrusty:headers) "$${TRUSTY_DIR}"
+
+    for f in $(locations @ree//:ndk-build); do
+      case $${f} in
+        *arm64-v8a/libnbl_loader_ree.a | *arm64-v8a/libnbl_secmgr_ree.a | *arm64-v8a/libnbl_fwk_ree.a)
+          cp -f "$${f}" "$${FWK_OUT}"
+          ;;
+        *arm64-v8a/libnbl_trusty.a)
+          cp -f "$${f}" "$${TRUSTY_OUT}"
+          ;;
+      esac
+    done
+
+    ## ion
+    ION_OUT="$${JNI_DIR}/ion/arm64-v8a"
+    ION_MTK_OUT="$${JNI_DIR}/ion_mtk/arm64-v8a"
+    mkdir -p "$${ION_OUT}"
+    cp "$(location @ree//libion:arm64-v8a)" "$${ION_OUT}"
+    mkdir -p "$${ION_MTK_OUT}"
+    cp "$(location @ree//libion_mtk:arm64-v8a)" "$${ION_MTK_OUT}"
+
+    # uree
+    UREE_OUT="$${JNI_DIR}/arm64-v8a"
+    mkdir -p "$${UREE_OUT}"
+    cp "$(location @ree//uree/libgz_uree:arm64-v8a)" "$${UREE_OUT}"
+
+    export JAVA_HOME="$$(dirname $$(dirname $$(readlink -f $$(which javac))))"
+    export JRE_HOME=$${JAVA_HOME}/jre
+    export CLASSPATH=.:$${JAVA_HOME}/lib:$${JRE_HOME}/lib
+    export PATH=$${JAVA_HOME}/bin:$$PATH
+
+    export ANDROID_HOME="$${ANDROID_SDK_HOME}"
+    export PATH=$${ANDROID_SDK_HOME}/tools:$${PATH}
+    export PATH=$${ANDROID_SDK_HOME}/platform-tools:$${PATH}
+    export FUCHSIA_OUT_DIR="$$(realpath $(BINDIR))"
+
+    unset ANDROID_NDK_HOME
+
+    pushd "$${SDK_ROOT}" > /dev/null
+    ./gradlew clean
+    ./gradlew assembleDebug
+    popd > /dev/null
+    """,
+    local = True,
+)
+
+genrule(
+    name = "install_headers_qemu",
+    srcs = [
+        "@ree//libnbl_fwk_ree:headers",
+        "@ree//libnbl_loader_ree:headers",
+        "@ree//libnbl_secmgr_ree:headers",
+        "@ree//libnbl_license_ree:headers",
+        "@ree//libtrusty:headers",
+        "@ree//openssl:gen-linux-aarch64",
+        "@zircon//:uapi_err_hdr",
+    ],
+    outs = ["includes_qemu"],
+    cmd = """
+    for f in $(SRCS); do
+      ext="$${f##*.}"
+      if [[ $${ext} != h ]]; then
+        continue
+      fi
+      d="$${f%/*}"
+      d="$${d#bazel-out/*/genfiles/}"
+      d="$${d#bazel-out/*/bin/}"
+
+      if [[ $${d} == external* ]]; then
+        extname="$${d#*external/}"
+        extname="$${extname%%/*}"
+
+        d="$${d#*external/zircon/trusty/lk/}"
+        d="$${d/uapi\\/uapi/trusty\\/uapi}"
+
+        d="$${d/linux-aarch64\\//}"
+        d="$${d#*external/$${extname}/}"
+      fi
+
+      mkdir -p "$@/$${d}"
+      cp "$${f}" "$@/$${d}/"
+    done
+    """,
+)
+
+genrule(
+    name = "install_libraries_qemu",
+    srcs = [
+        "@ree//libnbl_fwk_ree:nbl_fwk_ree",
+        "@ree//libnbl_loader_ree:nbl_loader_ree",
+        "@ree//libnbl_secmgr_ree:nbl_secmgr_ree",
+        "@ree//libnbl_license_ree:nbl_license_ree",
+        "@ree//libtrusty:nbl_trusty",
+        "@ree//openssl:gen-linux-aarch64",
+    ],
+    outs = ["libs_qemu"],
+    cmd = """
+    for f in $(SRCS); do
+      ext="$${f##*.}"
+      if [[ $${ext} != so ]] && [ $${ext} != a ]; then
+        continue
+      fi
+      d="$${f%/*}"
+      d="$${d#bazel-out/*/genfiles/}"
+      d="$${d#bazel-out/*/bin/}"
+
+      if [[ $${d} == external* ]]; then
+        extname="$${d#*external/}"
+        extname="$${extname%%/*}"
+
+        d="$${d/linux-aarch64\\/lib/}"
+        d="$${d#*external/$${extname}/}"
+      fi
+
+      d="$${d}/lib"
+      mkdir -p "$@/$${d}"
+      cp "$${f}" "$@/$${d}/"
+    done
+    """,
+)
+
+genrule(
+    name = "install_binaries_qemu",
+    srcs = [
+        "@ree//nblruncmd",
+        "@ree//storage/proxy:nbl_storageproxyd",
+        "@ree//nbl_daemon:nbl_daemon",
+        "@ree//nbl_daemon:hyp_nbl_daemon",
+        "@ree//nblmsg",
+        "@ree//libtrusty/tipc-test",
+        "@ree//ion_test",
+        "@ree//libnbl_loader_ree/tests:ta-loader_test",
+        "@ree//libnbl_license_ree/tests:ta-license_test",
+        "@ree//lifecycle_launcher/tests:lifecycle_launcher_tests",
+        "@ree//nbl_ta_monitor:nbl_ta_monitor",
+        "@ree//nbl_fwk_test",
+        "@ree//libnbl_secmgr_ree/tests:libnbl_secmgr_ree_test",
+        "@ree//libnebula-cpp:libnebula-base_tests",
+        "@ree//libnebula-cpp:libnebula-ipc_tests",
+        "@ree//libnebula-cpp:libnebula-rpc_tests",
+        "@ree//libfuchsia:tipc_chan_test",
+        "@ree//libfuchsia:posix_test",
+        "@ree//libfuchsia:unix_sock_test",
+        "@ree//libfuchsia/zircon/kernel/object:event_test",
+        "@ree//libfuchsia/zircon/kernel/object:handle_test",
+        "@ree//libfuchsia/zircon/kernel/object:state_tracker_tests",
+        "@ree//libfuchsia/zircon/system/utest/async:async-test",
+        "@ree//libfuchsia/zircon/system/utest/core/libzx:libzx-test",
+        "@ree//libfuchsia/zircon/system/utest/core/port:port-test",
+        "@ree//libfuchsia/garnet/lib/machina:machina-test",
+    ],
+    outs = ["bins_qemu"],
+    cmd = """
+    for f in $(SRCS); do
+      d="$${f%/*}"
+      d="$${d#bazel-out/*/genfiles/}"
+      d="$${d#bazel-out/*/bin/}"
+
+      if [[ $${d} == external* ]]; then
+        extname="$${d#*external/}"
+        extname="$${extname%%/*}"
+
+        d="$${d#*external/$${extname}/}"
+      fi
+
+      mkdir -p "$@/"
+      cp "$${f}" "$@/"
+    done
+    """,
+    testonly = True,
+)
+
+genrule(
+    name = "install_headers_ndk",
+    srcs = [
+        "@googletest//:headers",
+        "@ree//libnbl_fwk_ree:headers",
+        "@ree//libnbl_loader_ree:headers",
+        "@ree//libnbl_secmgr_ree:headers",
+        "@ree//libnbl_license_ree:headers",
+        "@ree//libtrusty:headers",
+        "@ree//openssl:gen-android-arm64-v8a",
+        "@zircon//:uapi_err_hdr",
+    ],
+    outs = ["includes_ndk"],
+    cmd = """
+    for f in $(SRCS); do
+      ext="$${f##*.}"
+      if [[ $${ext} != h ]]; then
+        continue
+      fi
+      d="$${f%/*}"
+      d="$${d#bazel-out/*/genfiles/}"
+      d="$${d#bazel-out/*/bin/}"
+
+      if [[ $${d} == external* ]]; then
+        extname="$${d#*external/}"
+        extname="$${extname%%/*}"
+
+        d="$${d#*external/zircon/trusty/lk/}"
+        d="$${d/uapi\\/uapi/trusty\\/uapi}"
+        d="$${d/android-arm64-v8a\\//}"
+
+        d="$${d#*external/$${extname}/}"
+      fi
+
+      mkdir -p "$@/$${d}"
+      cp "$${f}" "$@/$${d}/"
+    done
+    """,
+)
+
+genrule(
+    name = "install_libraries_ndk",
+    srcs = [
+        "@ree//libion:arm64-v8a",
+        "@ree//libion_mtk:arm64-v8a",
+        "@ree//openssl:gen-android-arm64-v8a",
+        "@ree//uree/libgz_uree:arm64-v8a",
+        "@ree//:ndk-build",
+    ],
+    outs = ["libs_ndk"],
+    cmd = """
+    for f in $(SRCS); do
+      ext="$${f##*.}"
+      if [[ $${ext} != so ]] && [ $${ext} != a ]; then
+        continue
+      fi
+      d="$${f%/*}"
+      d="$${d#bazel-out/*/genfiles/}"
+      d="$${d#bazel-out/*/bin/}"
+      d="$${d#*/ndk/}"
+
+      if [[ $${d} == external* ]]; then
+        extname="$${d#*external/}"
+        extname="$${extname%%/*}"
+
+        d="$${d#*external/$${extname}/}"
+      fi
+
+      # Openssl
+      d="$${d/android-arm64-v8a\\/lib/libs\\/arm64-v8a}"
+
+      # Formalize the names according to NDK layout
+      # shared: [modname]/libs/[arch]/xxx.so, no changes
+      # static: [modname]/obj/local/[arch]/xxx.a -> [modname]/libs/[arch]/xxx.a
+
+      arch="$${d##*/}"
+      d="$${d%/*}"
+      d="$${d%/libs}"
+      d="$${d%/obj/local}"
+      d="$${d##*/}"
+      d="$${d}/libs/$${arch}"
+
+      mkdir -p "$@/$${d}"
+      cp "$${f}" "$@/$${d}/"
+    done
+    """,
+)
+
+genrule(
+    name = "install_binaries_ndk",
+    srcs = [
+        "@ree//:ndk-build",
+    ],
+    outs = ["bins_ndk"],
+    cmd = """
+    for f in $(SRCS); do
+      ext="$${f##*.}"
+      if [[ $${ext} == so ]] || [ $${ext} == a ]; then
+        continue
+      fi
+      d="$${f%/*}"
+      d="$${d#bazel-out/*/genfiles/}"
+      d="$${d#bazel-out/*/bin/}"
+      d="$${d#*/ndk/}"
+
+      if [[ $${d} == external* ]]; then
+        extname="$${d#*external/}"
+        extname="$${extname%%/*}"
+
+        d="$${d#*external/$${extname}/}"
+      fi
+
+      # extract arm64-v8a binary only
+      arch="$${d##*/}"
+      if [[ $${arch} != "arm64-v8a" ]]; then
+        continue
+      fi
+      d="$${d%*/libs/$${arch}}"
+
+      mkdir -p "$@/$${d}"
+      cp "$${f}" "$@/$${d}/"
+    done
+    """,
+)
+
+genrule(
+    name = "install_nbl_sdk_artifacts",
+    srcs = [
+        "@ree//:ndk-build",
+        "@ree//uree/libgz_uree:arm64-v8a",
+        "@ree//libion:arm64-v8a",
+        "@ree//libion_mtk:arm64-v8a",
+        "@ree//libnbl_attest_ree:headers",
+        "@ree//libnbl_fwk_ree:headers",
+        "@ree//libnbl_loader_ree:headers",
+        "@ree//libnbl_secmgr_ree:headers",
+        "@ree//libnbl_license_ree:headers",
+        "@googletest//:headers",
+        "@ree//libtrusty:headers",
+    ],
+    outs = ["aar"],
+    cmd = """
+    LOCAL_PATH="$$(dirname $(location @nbl_sdk//:ROOT))"
+
+    export JAVA_HOME="$$(dirname $$(dirname $$(readlink -f $$(which javac))))"
+    export JRE_HOME=$${JAVA_HOME}/jre
+    export CLASSPATH=.:$${JAVA_HOME}/lib:$${JRE_HOME}/lib
+    export PATH=$${JAVA_HOME}/bin:$$PATH
+
+    export ANDROID_HOME="$${ANDROID_SDK_HOME}"
+    export PATH=$${ANDROID_SDK_HOME}/tools:$${PATH}
+    export PATH=$${ANDROID_SDK_HOME}/platform-tools:$${PATH}
+    export FUCHSIA_OUT_DIR="$$(realpath $(BINDIR))"
+
+    unset ANDROID_NDK_HOME
+
+    pushd "$${LOCAL_PATH}" > /dev/null
+    ./gradlew clean
+    ./gradlew assembleDebug
+    ./gradlew JavaDocJar
+    popd > /dev/null
+
+    OUTPUT_AAR="$${LOCAL_PATH}/nbl_sdk/build/outputs/aar/nbl_sdk-debug.aar"
+    OUTPUT_JAR="$${LOCAL_PATH}/nbl_sdk/build/libs/nbl_sdk-javadoc.jar"
+    TMPDIR="$${LOCAL_PATH}/nbl_sdk/build/outputs/aar/tmp"
+    mkdir -p $${TMPDIR}
+    unzip $${OUTPUT_AAR} -d $${TMPDIR}
+
+    $(location @scripts//:gen_prefab) -i $(SRCS) -o $${TMPDIR}
+
+    pushd "$${TMPDIR}" > /dev/null
+    zip -r -FS out.zip *
+    popd > /dev/null
+
+    mkdir -p $@
+    cp $${TMPDIR}/out.zip $@/nbl_sdk.aar
+    cp $${OUTPUT_JAR} $@/nbl_sdk-javadoc.jar
+    cp $${LOCAL_PATH}/nbl_sdk.gradle $@/nbl_sdk.gradle
+    cp $${LOCAL_PATH}/platform.keystore $@/platform.keystore
+    """,
+    local = True,
+    tools = [
+        "@nbl_sdk//:ROOT",
+        "@nbl_sdk//:all",
+        "@scripts//:gen_prefab",
+    ],
+)
+
+copy_single_file(
+    src = "@scripts//aosp:platform_keystore",
+    dst = "keystore/platform.keystore",
+)
