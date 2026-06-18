@@ -349,9 +349,9 @@ def main():
     ]
 
     env = {}
-    if sys.platform == 'darwin':
-        # The Darwin bash does not know the path to its built-in commands in an
-        # empty environment. Thus, we always pass the PATH.
+    if 'PATH' in os.environ:
+        # The Zircon makefiles invoke recursive make through PATH. Preserve it
+        # while still keeping the rest of the GN helper environment minimal.
         env['PATH'] = os.environ['PATH']
     if not debug:
         env['QUIET'] = '1'
