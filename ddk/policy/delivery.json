@@ -1,0 +1,47 @@
+{
+  "format_version": 1,
+  "note": "What the DDK delivers and what it keeps closed. Everything else about the delivery -- which libraries the roots need, how each compiles and links, which half each belongs to, what each is called -- is read from the build, and held to the last release by lock/. This file is the part the build cannot know: it says what MTK are given, not how anything is built.\n\nPatterns are GN labels without a toolchain: //dir:name names one target, //dir:* every target in that directory, //dir/* every target under it. Where binary and source both match, the more specific pattern wins.",
+  "layout": {
+    "libddk": "libddk/aries_v1",
+    "grt_ddk": "grt_ddk/garnet",
+    "mtk_ddk": "mtk_ddk/aries_v1"
+  },
+  "layout_reason": "Where each part sits in output/, and so in src/hypervisor/ on MTK's side: the repo manifest provisions each part one level down, at the name of its Gerrit project -- yocto/src/hypervisor/libddk/aries_v1, grt_ddk/garnet, mtk_ddk/aries_v1. output/ is laid out the same so the release produces what the manifest checks out. The halves still build beside each other: the recipe fetches each part flat into WORKDIR, where a half finds the component as ../libddk.",
+  "mirror_since": "2026-09-17",
+  "mirror_reason": "Where a half's mirror starts when there is no last release to continue from: a date, or a garnet revision. Everything before it is already on MTK's side, imported whole -- release 20260917-8919f813477f, built from the tree of this date -- so replaying it again would only make a history nobody deploys. Move it forward when the deployed base moves.",
+  "deploy": {
+    "gerrit": "ssh://www.goldenriver.com.cn:29420",
+    "prefix": "yocto/src/hypervisor",
+    "branch": "release-spm.68-3os_Dev",
+    "topic": "68_ddk_buringup"
+  },
+  "deploy_reason": "Where deploy_delivery.py pushes each part: the Gerrit the yocto layers live on, the project is prefix/ + the part's layout path, on this branch, under this topic. The CR and ONES ids of what is pushed come from the commits themselves, not from here.",
+  "deliver": [
+    "//garnet/drivers/*",
+    "//garnet/bin/guest:*",
+    "//garnet/bin/guest_manager:*",
+    "//garnet/bin/smc_communication:*",
+    "//garnet/bin/nebula_logger:*",
+    "//garnet/bin/suspend:*",
+    "//garnet/lib/littlefs:littlefs",
+    "//third_party/littlefs:littlefs"
+  ],
+  "deliver_reason": "The drivers the platform ships, the VMM and the programs beside it. The two littlefs libraries are delivered in their own right: nothing delivered links them, and a consumer builds filesystems against them.",
+  "exclude": [
+    "//garnet/drivers/board/qemu:*",
+    "//garnet/drivers/i2c/i2c-echo:*",
+    "//garnet/drivers/gpio/mt8676_gpio:gpio_demo"
+  ],
+  "exclude_reason": "Built by the product and not part of what a board ships: the QEMU board driver, an I2C echo test driver, and the GPIO demo program beside the MT8676 GPIO driver. Tests need no pattern: a target GN marks testonly is never delivered.",
+  "binary": [
+    "//zircon/*",
+    "//third_party/*",
+    "//garnet/public/lib/blk_crypto:*",
+    "//garnet/public/lib/blk_retry:*"
+  ],
+  "binary_reason": "Zircon is closed. Third-party code arrives compiled unless source says otherwise. blk_crypto and blk_retry are GRT's own block encryption and retry, private to GRT. Generated code -- FIDL and protobuf bindings -- is always delivered compiled and needs no pattern here.",
+  "source": [
+    "//third_party/littlefs:littlefs"
+  ],
+  "source_reason": "littlefs is delivered as source so the filesystem can be built against the DDK."
+}
