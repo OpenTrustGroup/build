@@ -72,6 +72,7 @@ template("sdk") {
                              "export",
                              "old_school",
                              "customized_folder",
+                             "portable_sources",
                            ])
 
     metadata = [
@@ -92,19 +93,53 @@ template("sdk") {
   }
   final_manifest_file = "$root_out_dir/sdk-manifests/$sdk_name"
 
+  manifest_to_copy = "$target_gen_dir/$generation_target_name.sdk"
+  manifest_copy_deps = [ ":$generation_target_name" ]
+  if (defined(invoker.portable_sources) && invoker.portable_sources) {
+    portable_target_name = "${target_name}_portable_manifest"
+    portable_manifest_file = "$target_gen_dir/$target_name.portable.sdk"
+
+    action(portable_target_name) {
+      script = "//build/sdk/create_portable_manifest.py"
+
+      inputs = [
+        manifest_to_copy,
+      ]
+      outputs = [
+        portable_manifest_file,
+      ]
+      deps = [
+        ":$generation_target_name",
+      ]
+
+      args = [
+        "--manifest",
+        rebase_path(manifest_to_copy),
+        "--out",
+        rebase_path(portable_manifest_file),
+        "--out-root",
+        rebase_path(root_out_dir),
+        "--source-root",
+        rebase_path("//"),
+      ]
+    }
+
+    manifest_to_copy = portable_manifest_file
+    manifest_copy_deps = []
+    manifest_copy_deps = [ ":$portable_target_name" ]
+  }
+
   # Copies the manifest to a central location.
   copy(copy_target_name) {
     sources = [
-      "$target_gen_dir/$generation_target_name.sdk",
+      manifest_to_copy,
     ]
 
     outputs = [
       final_manifest_file,
     ]
 
-    deps = [
-      ":$generation_target_name",
-    ]
+    deps = manifest_copy_deps
   }
 
   # Verifies that the manifest is valid.
@@ -143,6 +178,8 @@ template("sdk") {
   }
 
   if (defined(invoker.export) && invoker.export) {
+    assert(!defined(invoker.portable_sources) || !invoker.portable_sources,
+           "Portable-source SDK manifests cannot use the legacy SDK export")
     if (!defined(invoker.domains)) {
       assert(false, "A list of domains to export must be specified.")
     }

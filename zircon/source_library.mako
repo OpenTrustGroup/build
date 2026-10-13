@@ -14,40 +14,57 @@ config("${data.name}_config") {
   ]
 }
 
-source_set("${data.name}") {
-  # Zircon's source libraries, the legacy ones too, build against
-  # Zircon's own system call interface.
-  configs -= [ "//build/config:nebula_api" ]
+template("_source_library") {
+  target(invoker.target_type, target_name) {
+    # Zircon's source libraries, the legacy ones too, build against
+    # Zircon's own system call interface.
+    configs -= [ "//build/config:nebula_api" ]
 
-  sources = [
+    sources = [
     % for _, source in sorted(data.sources.iteritems()):
     "${source}",
     % endfor
     % for _, source in sorted(data.includes.iteritems()):
     "${source}",
     % endfor
-  ]
+    ]
 
-  public_deps = [
+    public_deps = [
     % for dep in sorted(data.deps):
     "../${dep}",
     % endfor
-  ]
+    ]
 
-  libs = [
+    libs = [
     % for lib in sorted(data.libs):
     "${lib}",
     % endfor
-  ]
+    ]
 
-  public_configs = [
-    ":${data.name}_config",
-  ]
+    public_configs = [
+      ":${data.name}_config",
+    ]
 
-  defines = [
-    "_ALL_SOURCE=1",
-  ]
+    defines = [
+      "_ALL_SOURCE=1",
+    ]
+
+    if (defined(invoker.output_name)) {
+      output_name = invoker.output_name
+    }
+  }
 }
+
+_source_library("${data.name}") {
+  target_type = "source_set"
+}
+
+% if data.emit_ddk_archive:
+_source_library("${data.name}_ddk_archive") {
+  target_type = "static_library"
+  output_name = "${data.name}"
+}
+% endif
 
 sdk_atom("${data.name}_sdk") {
   domain = "cpp"

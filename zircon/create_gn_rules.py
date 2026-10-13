@@ -38,6 +38,9 @@ LIBRARIES_BEING_MOVED = [ 'zx' ]
 # the make build and we have to manually curate these libraries.
 LIBRARIES_WITHOUT_SDK_HEADERS = [ 'trace-engine' ]
 
+# Source libraries that the standalone GRT DDK consumes as compiled archives.
+DDK_ARCHIVE_SOURCE_LIBRARIES = [ 'fbl', 'trace', 'zx', 'zxcpp' ]
+
 
 def make_dir(path, is_dir=False):
     '''Creates the directory at `path`.'''
@@ -131,6 +134,7 @@ class SourceLibrary(object):
 
     def __init__(self, name):
         self.name = name
+        self.emit_ddk_archive = name in DDK_ARCHIVE_SOURCE_LIBRARIES
         self.includes = {}
         self.include_dirs = set()
         self.sources = {}

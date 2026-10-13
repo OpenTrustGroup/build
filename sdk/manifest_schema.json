@@ -153,6 +153,13 @@
         "host-arch": {
           "description": "The architecture for host binaries referenced in this manifest, expressed as a compiler triple",
           "type": "string"
+        },
+        "source-locator-schema": {
+          "description": "Version of the root-relative source locator syntax",
+          "type": "string",
+          "enum": [
+            "1"
+          ]
         }
       },
       "required": [
