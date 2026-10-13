@@ -1,0 +1,79 @@
+LuaBridge 2.9
+
+LuaBridge ships no licence file of its own.  Upstream states the licence and
+names the copyright holders in README.md, and every source file carries an
+SPDX tag rather than a notice, so the terms have to be assembled from the two.
+Both are reproduced below unaltered: the README's licence section keeps its
+markdown, <br> and [n] markers and all, so it can be checked against upstream
+byte for byte.
+
+Only the three section titles and the restatement of the holders are GRT's,
+and the restatement adds nothing -- it is the same four notices with the link
+markers taken out, because those make the names hard to read.
+
+
+The holders, with the README's markdown removed
+----------------------------------------------
+
+Copyright 2019 Dmitry Tarakanov
+Copyright 2012 Vinnie Falco <vinnie.falco@gmail.com>
+Copyright 2008 Nigel Atkinson
+Copyright 2007 Nathan Reed
+
+Portions from The Loki Library:
+Copyright (C) 2001 Andrei Alexandrescu
+
+The same four notices as the excerpt below, which is the authority; the link
+markers there make the names hard to read and hard to match.
+
+
+From README.md, at tag 2.9
+--------------------------
+
+LuaBridge is published under the terms of the [MIT License][4].
+
+The original version of LuaBridge was written by Nathan Reed. The project has
+been taken over by [Vinnie Falco][7], who added new functionality, wrote the new
+documentation, and incorporated contributions from Nigel Atkinson.
+
+For questions, comments, or bug reports feel free to open a Github issue
+or contact Vinnie Falco directly at the email address indicated below.
+
+Copyright 2019, Dmitry Tarakanov<br>
+Copyright 2012, [Vinnie Falco][7] (<[vinnie.falco@gmail.com][8]>)<br>
+Copyright 2008, Nigel Atkinson<br>
+Copyright 2007, Nathan Reed<br>
+
+Portions from The Loki Library:<br>
+Copyright (C) 2001 by Andrei Alexandrescu
+
+Older versions of LuaBridge up to and including 0.2 are distributed under the
+BSD 3-Clause License. See the corresponding license file in those versions
+(distributed separately) for more details.
+
+
+The MIT License
+---------------
+
+This is the text the SPDX-License-Identifier: MIT tag in each LuaBridge
+source file names.  It is reproduced from the licence upstream links to,
+<http://www.opensource.org/licenses/mit-license.html>, with the copyright
+holders above.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

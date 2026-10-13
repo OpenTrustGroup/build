@@ -1,0 +1,91 @@
+{
+  "format_version": 1,
+  "note": "Where these texts came from. Fetched by hand, once, and kept here so a release never needs the network; verify against the checksums below rather than re-downloading.\n\nThe toolchain texts are the reason this file exists. Neither the prebuilt clang nor the pinned sysroot ships a LICENSE file of any kind, while the code in them points at one, so each text is taken from the upstream release it was built from. They are not interchangeable -- the NCSA body is shared between five of them and the copyright line is not.\n\nThe rest cover code that ships as source in the delivered halves and whose upstream ships no licence file either. Those entries carry `extracted_from`: the text is a verbatim part of a file upstream does ship, and both checksums are recorded -- the source file's, so the extraction can be repeated, and the extracted text's, so it can be checked here.",
+  "matches_prebuilt_stamp": "9388aa0d04b123ab73cb4e0824f8dab437ee35ac",
+  "files": {
+    "LLVM.LICENSE.TXT": {
+      "upstream": "https://github.com/llvm/llvm-project",
+      "tag": "llvmorg-7.0.0",
+      "path": "llvm/LICENSE.TXT",
+      "url": "https://raw.githubusercontent.com/llvm/llvm-project/llvmorg-7.0.0/llvm/LICENSE.TXT",
+      "sha256": "0303dfeaac87b80d2d1e543aa38d5be77b0eac93c3d04fe7e3c8eaa71a778667",
+      "bytes": 3192
+    },
+    "CLANG.LICENSE.TXT": {
+      "upstream": "https://github.com/llvm/llvm-project",
+      "tag": "llvmorg-7.0.0",
+      "path": "clang/LICENSE.TXT",
+      "url": "https://raw.githubusercontent.com/llvm/llvm-project/llvmorg-7.0.0/clang/LICENSE.TXT",
+      "sha256": "3f3f2e96e3b7319d2b4b49227d6da624a717340107ce2ca5342a25e0e57dfd35",
+      "bytes": 2749
+    },
+    "LLD.LICENSE.TXT": {
+      "upstream": "https://github.com/llvm/llvm-project",
+      "tag": "llvmorg-7.0.0",
+      "path": "lld/LICENSE.TXT",
+      "url": "https://raw.githubusercontent.com/llvm/llvm-project/llvmorg-7.0.0/lld/LICENSE.TXT",
+      "sha256": "674dc33a7da931bd0673e5ca070f5d6c97ca4f6e95703171fc7a484304ec64f5",
+      "bytes": 2735
+    },
+    "LIBCXX.LICENSE.TXT": {
+      "upstream": "https://github.com/llvm/llvm-project",
+      "tag": "llvmorg-7.0.0",
+      "path": "libcxx/LICENSE.TXT",
+      "url": "https://raw.githubusercontent.com/llvm/llvm-project/llvmorg-7.0.0/libcxx/LICENSE.TXT",
+      "sha256": "c1938c0e9e90639d1e8f5a7f6bebaab83a3642e0ee44295a4c69934686d0bda8",
+      "bytes": 3493
+    },
+    "COMPILER_RT.LICENSE.TXT": {
+      "upstream": "https://github.com/llvm/llvm-project",
+      "tag": "llvmorg-7.0.0",
+      "path": "compiler-rt/LICENSE.TXT",
+      "url": "https://raw.githubusercontent.com/llvm/llvm-project/llvmorg-7.0.0/compiler-rt/LICENSE.TXT",
+      "sha256": "417541d990edb3f96327ac03cb67e52eac80fc5c3e7afc69213cd04d7c3b9b27",
+      "bytes": 4289
+    },
+    "LIBXML2.LICENSE.TXT": {
+      "upstream": "https://gitlab.gnome.org/GNOME/libxml2",
+      "tag": "v2.9.1",
+      "path": "Copyright",
+      "url": "https://gitlab.gnome.org/GNOME/libxml2/-/raw/v2.9.1/Copyright",
+      "sha256": "c5c63674f8a83c4d2e385d96d1c670a03cb871ba2927755467017317878574bd",
+      "bytes": 1289
+    },
+    "ZLIB.LICENSE.TXT": {
+      "upstream": "https://github.com/madler/zlib",
+      "tag": "v1.2.8",
+      "path": "README",
+      "url": "https://raw.githubusercontent.com/madler/zlib/v1.2.8/README",
+      "sha256": "53a466b504371dcdda1504c90d8121d4823921f03554c3526995fb2bae7159f9",
+      "bytes": 5185
+    },
+    "LIBLZMA.LICENSE.TXT": {
+      "upstream": "https://github.com/tukaani-project/xz",
+      "tag": "v5.2.0",
+      "path": "COPYING",
+      "url": "https://raw.githubusercontent.com/tukaani-project/xz/v5.2.0/COPYING",
+      "sha256": "c4f8e14fafe458d84808a4cd8b69f94673ebe2bf8fc992291629a69ac12218f8",
+      "bytes": 2774
+    },
+    "LUA.LICENSE.TXT": {
+      "upstream": "https://github.com/lua/lua",
+      "tag": "v5.3.3",
+      "path": "lua.h",
+      "url": "https://raw.githubusercontent.com/lua/lua/v5.3.3/lua.h",
+      "extracted_from": "the copyright notice at the end of lua.h, which is where Lua states its licence in the source distribution. Byte-identical to the copy in garnet/public/lib/lua/src/lua.h, which is how the vendored copy was checked against upstream.",
+      "source_sha256": "3e5bfa5d56991cafedef3abe51d96a9cc91478a8ebaadd109796e634ad8375e5",
+      "sha256": "99b10d03be5f3b5ae3bb914433593dea2ad87180a5526724b1dfaae61967fed8",
+      "bytes": 1263
+    },
+    "LUABRIDGE.LICENSE.TXT": {
+      "upstream": "https://github.com/vinniefalco/LuaBridge",
+      "tag": "2.9",
+      "path": "README.md",
+      "url": "https://raw.githubusercontent.com/vinniefalco/LuaBridge/2.9/README.md",
+      "extracted_from": "LuaBridge ships no licence file: the repository root at tag 2.9 holds none, the sources carry an SPDX tag and no notice, and README.md is where upstream states the licence and names the holders. That part of the README is reproduced verbatim, followed by the MIT text its tags name. The header and the two section titles are the only GRT wording.",
+      "source_sha256": "ff3d7f85d5486b5c056aa4f597fdbb24b5f4581204196ce1091a3e5c3628a0ea",
+      "sha256": "5846ae6aa9e5afa94bd24ad6b08fe7c2fba5824a5a8fadc932d0323a2fbe7047",
+      "bytes": 3320
+    }
+  }
+}

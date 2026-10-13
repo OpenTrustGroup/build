@@ -1,0 +1,764 @@
+{
+ "attribution_note": "A component's licence text names the licence and its principal holders. Some files carry a notice of their own on top of that -- Linux's virtio_ring.h keeps Rusty Russell's and IBM's, boringssl keeps Sun's and Amazon's, libfdt keeps Kim Phillips's -- and those travel in the files, which is where the licences ask them to be. They are not repeated here; listing every contributor of every upstream would not change what a recipient receives.",
+ "components": [
+  {
+   "license_file": "//garnet/LICENSE",
+   "name": "nebula",
+   "note": "GRT's own code and everything a longer prefix does not claim. The BSD-3-Clause text it points at carries both GRT's copyright and the Fuchsia Authors' one this code derives from. zircon/LICENSE is not used: it is a pointer file naming where each licence lives, not a licence text.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//zircon/third_party/ulib/musl/COPYRIGHT",
+   "name": "musl",
+   "note": "The C library. Its headers carry no inline notice, which is why this file has to travel with them.",
+   "prefix": "sysroot/include",
+   "spdx": "MIT"
+  },
+  {
+   "license_file": "//zircon/system/LICENSE",
+   "name": "zircon-abi",
+   "note": "Zircon's system ABI headers, inside the sysroot but not part of musl. zircon/LICENSE is not used: it is a pointer file naming where each licence lives, not a licence text; system/LICENSE is the BSD-3-Clause it points at for these. The licence text carries GoldenRiver's copyright line as well as the Fuchsia Authors': 303 of the files here are ones GRT has modified and that say so in their own headers.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "sysroot/include/zircon",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//zircon/system/LICENSE",
+   "name": "nebula-abi",
+   "note": "Nebula's own ABI headers, inside the sysroot. zircon/LICENSE is not used: it is a pointer file naming where each licence lives, not a licence text; system/LICENSE is the BSD-3-Clause it points at for these. The licence text carries GoldenRiver's copyright line as well as the Fuchsia Authors': 303 of the files here are ones GRT has modified and that say so in their own headers.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "sysroot/include/nebula",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//third_party/protobuf/LICENSE",
+   "name": "protobuf",
+   "note": "Google Protocol Buffers runtime headers.",
+   "prefix": "include/google",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "embedded_holders": [
+    "Sun Microsystems",
+    "Nokia",
+    "Amazon"
+   ],
+   "embedded_reason": "BoringSSL's LICENSE is the OpenSSL one and does not enumerate the contributors whose notices sit in individual files; those notices travel in the files, which is where the OpenSSL licence asks them to be.",
+   "license_file": "//third_party/boringssl/src/LICENSE",
+   "name": "boringssl",
+   "note": "BoringSSL. The OpenSSL and SSLeay licences are permissive, BSD-style; nothing here is copyleft.",
+   "prefix": "include/openssl",
+   "spdx": "OpenSSL AND ISC AND Apache-2.0"
+  },
+  {
+   "license_file": "//third_party/rapidjson/LICENSE",
+   "name": "rapidjson",
+   "note": "Header-only JSON parser.",
+   "prefix": "include/third_party/rapidjson",
+   "spdx": "MIT"
+  },
+  {
+   "elected_spdx": "BSD-2-Clause",
+   "embedded_holders": [
+    "Kim Phillips"
+   ],
+   "embedded_reason": "libfdt's LICENSE names David Gibson, its author; later contributors keep their notices in the files they changed.",
+   "license_file": "//third_party/fdt/LICENSE",
+   "name": "libfdt",
+   "note": "libfdt is dual licensed and the choice is the recipient's. We elect BSD-2-Clause, as U-Boot, Zephyr and the Linux tooling do. The GPL half of the upstream header text travels with the file; electing BSD is what makes it not apply.",
+   "prefix": "include/fdt.h",
+   "spdx": "GPL-2.0-or-later OR BSD-2-Clause"
+  },
+  {
+   "elected_spdx": "BSD-2-Clause",
+   "license_file": "//third_party/fdt/LICENSE",
+   "name": "libfdt",
+   "note": "As above.",
+   "prefix": "include/libfdt.h",
+   "spdx": "GPL-2.0-or-later OR BSD-2-Clause"
+  },
+  {
+   "elected_spdx": "BSD-2-Clause",
+   "license_file": "//third_party/fdt/LICENSE",
+   "name": "libfdt",
+   "note": "As above.",
+   "prefix": "include/libfdt_env.h",
+   "spdx": "GPL-2.0-or-later OR BSD-2-Clause"
+  },
+  {
+   "license_file": "//third_party/ree-trusty/libnbl_vhm/include/acrn/LICENSE",
+   "name": "acrn",
+   "note": "Intel ACRN hypervisor service ABI headers. acrn_common.h and atomic.h carry an SPDX tag of their own; hsm_ioctl_defs.h does not and is declared separately below.",
+   "prefix": "include/acrn",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "elected_spdx": "BSD-2-Clause",
+   "license_file": "//third_party/fdt/LICENSE",
+   "name": "libfdt",
+   "note": "The compiled form of the headers above, under the same election.",
+   "prefix": "lib/libfdt.a",
+   "spdx": "GPL-2.0-or-later OR BSD-2-Clause"
+  },
+  {
+   "license_file": "//third_party/boringssl/src/LICENSE",
+   "name": "boringssl",
+   "note": "Compiled BoringSSL.",
+   "prefix": "lib/libcrypto.so",
+   "spdx": "OpenSSL AND ISC AND Apache-2.0"
+  },
+  {
+   "license_file": "//third_party/boringssl/src/LICENSE",
+   "name": "boringssl",
+   "note": "Compiled BoringSSL.",
+   "prefix": "lib/libssl.so",
+   "spdx": "OpenSSL AND ISC AND Apache-2.0"
+  },
+  {
+   "license_file": "//third_party/protobuf/LICENSE",
+   "name": "protobuf",
+   "note": "Compiled Protocol Buffers runtime.",
+   "prefix": "lib/libprotobuf_full.a",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//zircon/third_party/ulib/musl/COPYRIGHT",
+   "name": "musl",
+   "note": "The C library, compiled.",
+   "prefix": "sysroot/lib",
+   "spdx": "MIT"
+  },
+  {
+   "license_file": "//zircon/third_party/ulib/musl/COPYRIGHT",
+   "name": "musl",
+   "note": "The C library, compiled, with debug information.",
+   "prefix": "sysroot/debug",
+   "spdx": "MIT"
+  },
+  {
+   "license_file": "//zircon/third_party/ulib/musl/COPYRIGHT",
+   "name": "musl",
+   "note": "The C library, as distributed on the device.",
+   "prefix": "sysroot/dist",
+   "spdx": "MIT"
+  },
+  {
+   "elected_spdx": "BSD-2-Clause",
+   "license_file": "//third_party/ree-trusty/libnbl_vhm/include/acrn/LICENSE",
+   "name": "acrn-hsm",
+   "note": "The ACRN hypervisor service module ioctl definitions. Intel ships it under a dual licence -- \"This file is provided under a dual BSD/GPLv2 license. When using or redistributing this file, you may do so under either license.\" -- and we elect the BSD half. That half carries two conditions, not three, so it is BSD-2-Clause; its warranty disclaimer names NetApp and ends in a $FreeBSD$ tag, which is where Intel took the boilerplate from. The LICENSE beside it records the election and quotes the notice verbatim. Unlike the two files beside it, it has no SPDX tag, which is why the directory-wide declaration covered it wrongly; the copyleft cross-check is what caught that.",
+   "prefix": "include/acrn/hsm_ioctl_defs.h",
+   "spdx": "GPL-2.0-only OR BSD-2-Clause"
+  },
+  {
+   "embedded_holders": [
+    "Google",
+    "Google Inc",
+    "Travis Geiselbrecht",
+    "NVIDIA CORPORATION"
+   ],
+   "embedded_reason": "The LK Trusty LICENSE attributes to \"LK Trusty Authors\" collectively. These are those authors; each file keeps its own notice.",
+   "license_file": "//zircon/trusty/lib/include/user/LICENSE",
+   "name": "lk-trusty",
+   "note": "LK Trusty user-space headers. Google and the LK authors publish them under MIT; the catch-all rule had them as BSD-3-Clause until each file was read against its own SPDX tag.",
+   "prefix": "include/trusty_app_manifest.h",
+   "spdx": "MIT"
+  },
+  {
+   "embedded_holders": [
+    "Google",
+    "Google Inc",
+    "Travis Geiselbrecht",
+    "NVIDIA CORPORATION"
+   ],
+   "embedded_reason": "The LK Trusty LICENSE attributes to \"LK Trusty Authors\" collectively. These are those authors; each file keeps its own notice. Named on every entry rather than on one of them: a component that ships some of these headers and not the one that happened to carry the list would report its authors as a gap.",
+   "license_file": "//zircon/trusty/lib/include/user/LICENSE",
+   "name": "lk-trusty",
+   "note": "As above.",
+   "prefix": "include/trusty_ipc.h",
+   "spdx": "MIT"
+  },
+  {
+   "embedded_holders": [
+    "Google",
+    "Google Inc",
+    "Travis Geiselbrecht",
+    "NVIDIA CORPORATION"
+   ],
+   "embedded_reason": "The LK Trusty LICENSE attributes to \"LK Trusty Authors\" collectively. These are those authors; each file keeps its own notice. Named on every entry rather than on one of them: a component that ships some of these headers and not the one that happened to carry the list would report its authors as a gap.",
+   "license_file": "//zircon/trusty/lib/include/user/LICENSE",
+   "name": "lk-trusty",
+   "note": "As above.",
+   "prefix": "include/trusty_std.h",
+   "spdx": "MIT"
+  },
+  {
+   "embedded_holders": [
+    "Google",
+    "Google Inc",
+    "Travis Geiselbrecht",
+    "NVIDIA CORPORATION"
+   ],
+   "embedded_reason": "The LK Trusty LICENSE attributes to \"LK Trusty Authors\" collectively. These are those authors; each file keeps its own notice. Named on every entry rather than on one of them: a component that ships some of these headers and not the one that happened to carry the list would report its authors as a gap.",
+   "license_file": "//zircon/trusty/lib/include/user/LICENSE",
+   "name": "lk-trusty",
+   "note": "As above.",
+   "prefix": "include/trusty_syscalls.h",
+   "spdx": "MIT"
+  },
+  {
+   "embedded_holders": [
+    "Google",
+    "Google Inc",
+    "Travis Geiselbrecht",
+    "NVIDIA CORPORATION"
+   ],
+   "embedded_reason": "The LK Trusty LICENSE attributes to \"LK Trusty Authors\" collectively. These are those authors; each file keeps its own notice. Named on every entry rather than on one of them: a component that ships some of these headers and not the one that happened to carry the list would report its authors as a gap.",
+   "license_file": "//zircon/trusty/lib/include/user/LICENSE",
+   "name": "lk-trusty",
+   "note": "As above.",
+   "prefix": "include/trusty_uuid.h",
+   "spdx": "MIT"
+  },
+  {
+   "embedded_holders": [
+    "Google",
+    "Google Inc",
+    "Travis Geiselbrecht",
+    "NVIDIA CORPORATION"
+   ],
+   "embedded_reason": "The LK Trusty LICENSE attributes to \"LK Trusty Authors\" collectively. These are those authors; each file keeps its own notice. Named on every entry rather than on one of them: a component that ships some of these headers and not the one that happened to carry the list would report its authors as a gap.",
+   "license_file": "//zircon/trusty/lib/include/user/LICENSE",
+   "name": "lk-trusty",
+   "note": "LK kernel headers, same lineage and licence.",
+   "prefix": "include/lk",
+   "spdx": "MIT"
+  },
+  {
+   "embedded_holders": [
+    "Google",
+    "Google Inc",
+    "Travis Geiselbrecht",
+    "NVIDIA CORPORATION"
+   ],
+   "embedded_reason": "The LK Trusty LICENSE attributes to \"LK Trusty Authors\" collectively. These are those authors; each file keeps its own notice. Named on every entry rather than on one of them: a component that ships some of these headers and not the one that happened to carry the list would report its authors as a gap.",
+   "license_file": "//zircon/trusty/lib/include/user/LICENSE",
+   "name": "lk-trusty",
+   "note": "LK Trusty user ABI headers, same lineage and licence.",
+   "prefix": "include/uapi",
+   "spdx": "MIT"
+  },
+  {
+   "license_file": "//zircon/LICENSE.MIT",
+   "name": "zircon-mit",
+   "note": "GRT's platform layout definitions. MIT, like the LK lineage it is written against, and GRT's copyright is in LICENSE.MIT where the LK Trusty text does not carry it.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "include/pal/platform_defs.h",
+   "spdx": "MIT"
+  },
+  {
+   "embedded_holders": [
+    "Google",
+    "Google Inc",
+    "Travis Geiselbrecht",
+    "NVIDIA CORPORATION"
+   ],
+   "embedded_reason": "The LK Trusty LICENSE attributes to \"LK Trusty Authors\" collectively. These are those authors; each file keeps its own notice. Named on every entry rather than on one of them: a component that ships some of these headers and not the one that happened to carry the list would report its authors as a gap.",
+   "license_file": "//zircon/trusty/lib/include/user/LICENSE",
+   "name": "lk-trusty",
+   "note": "The one file in nbl_fwk that comes from LK rather than from GRT; the rest of the directory carries no tag and is ours.",
+   "prefix": "include/nbl_fwk/err.h",
+   "spdx": "MIT"
+  },
+  {
+   "license_file": "//zircon/trusty/lib/lib/rng/LICENSE",
+   "name": "trusty-aosp",
+   "note": "Trusty logging and unit-test headers, from the Android Open Source Project, under Apache-2.0 rather than the MIT of the files beside them.",
+   "prefix": "include/trusty_log.h",
+   "spdx": "Apache-2.0"
+  },
+  {
+   "license_file": "//zircon/trusty/lib/lib/rng/LICENSE",
+   "name": "trusty-aosp",
+   "note": "As above.",
+   "prefix": "include/trusty_unittest.h",
+   "spdx": "Apache-2.0"
+  },
+  {
+   "license_file": "//zircon/third_party/ulib/linenoise/LICENSE",
+   "name": "linenoise",
+   "note": "Salvatore Sanfilippo and Pieter Noordhuis's line editor, two-clause BSD rather than three.",
+   "prefix": "include/linenoise",
+   "spdx": "BSD-2-Clause"
+  },
+  {
+   "license_file": "//zircon/LICENSE.MIT",
+   "name": "zircon-mit",
+   "note": "Multiboot definitions, LK lineage back to Corey Tabaka in 2009, MIT rather than the BSD-3-Clause of the headers around them.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "sysroot/include/zircon/boot/multiboot.h",
+   "spdx": "MIT"
+  },
+  {
+   "license_file": "//zircon/LICENSE.MIT",
+   "name": "zircon-mit",
+   "note": "GRT's own trace ABI, written against the LK lineage and published under MIT.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "sysroot/include/zircon/nbl_trace",
+   "spdx": "MIT"
+  },
+  {
+   "embedded_holders": [
+    "Rusty Russell IBM Corporation 2007"
+   ],
+   "embedded_reason": "virtio_ring.h comes from Linux, whose virtio headers carry an explicit BSD exception -- \"This header is BSD licensed so anyone can use the definitions to implement compatible drivers/servers\" -- and keeps its authors' notice in the file.",
+   "license_file": "//zircon/system/LICENSE",
+   "name": "zircon",
+   "note": "Zircon's compiled libraries. Longest prefix wins, so the archives that are GRT's own and the third-party ones below claim themselves back. The licence text carries GoldenRiver's copyright line as well as the Fuchsia Authors': 303 of the files here are ones GRT has modified and that say so in their own headers.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "lib",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//zircon/system/LICENSE",
+   "name": "zircon",
+   "note": "Zircon system library headers (bitmap), traced to zircon/system in the export manifest. The licence text carries GoldenRiver's copyright line as well as the Fuchsia Authors': 303 of the files here are ones GRT has modified and that say so in their own headers.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "include/bitmap",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//zircon/system/LICENSE",
+   "name": "zircon",
+   "note": "Zircon system library headers (block-client), traced to zircon/system in the export manifest. The licence text carries GoldenRiver's copyright line as well as the Fuchsia Authors': 303 of the files here are ones GRT has modified and that say so in their own headers.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "include/block-client",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//zircon/system/LICENSE",
+   "name": "zircon",
+   "note": "Zircon system library headers (ddk), traced to zircon/system in the export manifest. The licence text carries GoldenRiver's copyright line as well as the Fuchsia Authors': 303 of the files here are ones GRT has modified and that say so in their own headers.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "include/ddk",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//zircon/system/LICENSE",
+   "name": "zircon",
+   "note": "Zircon system library headers (ddktl), traced to zircon/system in the export manifest. The licence text carries GoldenRiver's copyright line as well as the Fuchsia Authors': 303 of the files here are ones GRT has modified and that say so in their own headers.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "include/ddktl",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//zircon/system/LICENSE",
+   "name": "zircon",
+   "note": "Zircon system library headers (driver), traced to zircon/system in the export manifest. The licence text carries GoldenRiver's copyright line as well as the Fuchsia Authors': 303 of the files here are ones GRT has modified and that say so in their own headers.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "include/driver",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//zircon/system/LICENSE",
+   "name": "zircon",
+   "note": "Zircon system library headers (fbl), traced to zircon/system in the export manifest. The licence text carries GoldenRiver's copyright line as well as the Fuchsia Authors': 303 of the files here are ones GRT has modified and that say so in their own headers.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "include/fbl",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//zircon/system/LICENSE",
+   "name": "zircon",
+   "note": "Zircon system library headers (fdio), traced to zircon/system in the export manifest. The licence text carries GoldenRiver's copyright line as well as the Fuchsia Authors': 303 of the files here are ones GRT has modified and that say so in their own headers.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "include/fdio",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//zircon/system/LICENSE",
+   "name": "zircon",
+   "note": "Zircon system library headers (fs), traced to zircon/system in the export manifest. The licence text carries GoldenRiver's copyright line as well as the Fuchsia Authors': 303 of the files here are ones GRT has modified and that say so in their own headers.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "include/fs",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//zircon/system/LICENSE",
+   "name": "zircon",
+   "note": "Zircon system library headers (hid), traced to zircon/system in the export manifest. The licence text carries GoldenRiver's copyright line as well as the Fuchsia Authors': 303 of the files here are ones GRT has modified and that say so in their own headers.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "include/hid",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//zircon/system/LICENSE",
+   "name": "zircon",
+   "note": "Zircon system library headers (hw), traced to zircon/system in the export manifest. The licence text carries GoldenRiver's copyright line as well as the Fuchsia Authors': 303 of the files here are ones GRT has modified and that say so in their own headers.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "include/hw",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//zircon/system/LICENSE",
+   "name": "zircon",
+   "note": "Zircon system library headers (lib), traced to zircon/system in the export manifest. The licence text carries GoldenRiver's copyright line as well as the Fuchsia Authors': 303 of the files here are ones GRT has modified and that say so in their own headers.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "include/lib",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//zircon/system/LICENSE",
+   "name": "zircon",
+   "note": "Zircon system library headers (mdi), traced to zircon/system in the export manifest. The licence text carries GoldenRiver's copyright line as well as the Fuchsia Authors': 303 of the files here are ones GRT has modified and that say so in their own headers.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "include/mdi",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//zircon/system/LICENSE",
+   "name": "zircon",
+   "note": "Zircon system library headers (pretty), traced to zircon/system in the export manifest. The licence text carries GoldenRiver's copyright line as well as the Fuchsia Authors': 303 of the files here are ones GRT has modified and that say so in their own headers.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "include/pretty",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//zircon/system/LICENSE",
+   "name": "zircon",
+   "note": "Zircon system library headers (sync), traced to zircon/system in the export manifest. The licence text carries GoldenRiver's copyright line as well as the Fuchsia Authors': 303 of the files here are ones GRT has modified and that say so in their own headers.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "include/sync",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//zircon/system/LICENSE",
+   "name": "zircon",
+   "note": "Zircon system library headers (syslog), traced to zircon/system in the export manifest. The licence text carries GoldenRiver's copyright line as well as the Fuchsia Authors': 303 of the files here are ones GRT has modified and that say so in their own headers.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "include/syslog",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//zircon/system/LICENSE",
+   "name": "zircon",
+   "note": "Zircon system library headers (task-utils), traced to zircon/system in the export manifest. The licence text carries GoldenRiver's copyright line as well as the Fuchsia Authors': 303 of the files here are ones GRT has modified and that say so in their own headers.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "include/task-utils",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//zircon/system/LICENSE",
+   "name": "zircon",
+   "note": "Zircon system library headers (trace), traced to zircon/system in the export manifest. The licence text carries GoldenRiver's copyright line as well as the Fuchsia Authors': 303 of the files here are ones GRT has modified and that say so in their own headers.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "include/trace",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//zircon/system/LICENSE",
+   "name": "zircon",
+   "note": "Zircon system library headers (trace-engine), traced to zircon/system in the export manifest. The licence text carries GoldenRiver's copyright line as well as the Fuchsia Authors': 303 of the files here are ones GRT has modified and that say so in their own headers.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "include/trace-engine",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//zircon/system/LICENSE",
+   "name": "zircon",
+   "note": "Zircon system library headers (virtio), traced to zircon/system in the export manifest. The licence text carries GoldenRiver's copyright line as well as the Fuchsia Authors': 303 of the files here are ones GRT has modified and that say so in their own headers. Some of these come from Linux and keep its authors' notices; they are BSD-licensed by an explicit exception, which each file states in its own words.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "include/virtio",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//zircon/system/LICENSE",
+   "name": "zircon",
+   "note": "Zircon system library headers (zircon), traced to zircon/system in the export manifest. The licence text carries GoldenRiver's copyright line as well as the Fuchsia Authors': 303 of the files here are ones GRT has modified and that say so in their own headers.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "include/zircon",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//zircon/system/LICENSE",
+   "name": "zircon",
+   "note": "Zircon system library headers (zxcpp), traced to zircon/system in the export manifest. The licence text carries GoldenRiver's copyright line as well as the Fuchsia Authors': 303 of the files here are ones GRT has modified and that say so in their own headers.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "include/zxcpp",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//garnet/LICENSE",
+   "name": "nebula",
+   "note": "GRT's own code, not Zircon's.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "lib/libblk_crypto.a",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//garnet/LICENSE",
+   "name": "nebula",
+   "note": "GRT's own code, not Zircon's.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "lib/libblk_retry.a",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//garnet/LICENSE",
+   "name": "nebula",
+   "note": "GRT's own code, not Zircon's.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "lib/libconfig.a",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//garnet/LICENSE",
+   "name": "nebula",
+   "note": "GRT's own code, not Zircon's.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "lib/libvm_config.a",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//garnet/LICENSE",
+   "name": "nebula",
+   "note": "GRT's own code, not Zircon's.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "lib/libfidl_SpiService.a",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//garnet/LICENSE",
+   "name": "nebula",
+   "note": "GRT's own code, not Zircon's.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "lib/libfidl_component.a",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//garnet/LICENSE",
+   "name": "nebula",
+   "note": "GRT's own code, not Zircon's.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "lib/libfidl_machina.a",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//garnet/LICENSE",
+   "name": "nebula",
+   "note": "GRT's own code, not Zircon's.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "lib/libfidl_mem.a",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//garnet/LICENSE",
+   "name": "nebula",
+   "note": "GRT's own code, not Zircon's.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "lib/libfidl_virtualization.a",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//garnet/LICENSE",
+   "name": "nebula",
+   "note": "GRT's own headers.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "include/blk_retry",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//garnet/LICENSE",
+   "name": "nebula",
+   "note": "GRT's own headers.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "include/fuchsia",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//garnet/LICENSE",
+   "name": "nebula",
+   "note": "GRT's own headers that a delivered half includes by path: the generated protobuf and the GRT bus API. Published under include/garnet because a delivered half keeps the tree's top-level name and its include lines have to point at what this component has.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "include/garnet",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//garnet/LICENSE",
+   "name": "nebula",
+   "note": "GRT's own headers.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "include/soc",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//garnet/LICENSE",
+   "name": "nebula",
+   "note": "GRT's Nebula framework headers, which live in hee-trusty; err.h alone comes from LK and is declared separately.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "include/nbl_fwk",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//garnet/LICENSE",
+   "name": "nebula",
+   "note": "GRT's own, compiled.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "lib/libnbl_fwk_hee.a",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//garnet/LICENSE",
+   "name": "nebula",
+   "note": "GRT's own, compiled.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "lib/libnbl_nmt_tee.a",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//third_party/protobuf/LICENSE.atomicops",
+   "name": "protobuf-redhat",
+   "note": "Red Hat's generic-gcc atomics, which protobuf's own LICENSE excludes by name. Reached through the #include closure of atomicops.h, under an #ifdef this build does not take.",
+   "prefix": "include/google/protobuf/stubs/atomicops_internals_generic_gcc.h",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//third_party/protobuf/LICENSE.atomicops",
+   "name": "protobuf-bloomberg",
+   "note": "Bloomberg's AIX/POWER atomics, excluded from protobuf's LICENSE the same way and reached the same way.",
+   "prefix": "include/google/protobuf/stubs/atomicops_internals_power.h",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "licenses/LLVM.LICENSE.TXT",
+   "name": "llvm",
+   "note": "The compiler the delivery was built with, kept inside the component so one NOTICE and one manifest cover the whole thing. llvm-ar and llvm-ranlib fall here, along with anything a longer prefix does not claim -- and that catch-all is deliberate: nothing under toolchain/ may reach the root entry, which says GoldenRiver owns it. LLVM 7.0 predates the Apache-2.0-WITH-LLVM-exception relicensing, so this is the University of Illinois/NCSA Open Source License. clang and lld are separate subprojects with their own copyright lines and their own entries. The version and the triple are spelled out rather than templated: a toolchain bump should make the unclaimed-file gate fire, because it is the moment somebody has to look at these licences again.",
+   "prefix": "toolchain",
+   "spdx": "NCSA"
+  },
+  {
+   "embedded_holders": [
+    "Daniel Veillard"
+   ],
+   "embedded_reason": "The upstream Copyright file names him and the shipped binary carries no notice of its own, so the text beside it is what reproduces the attribution.",
+   "license_file": "licenses/LIBXML2.LICENSE.TXT",
+   "name": "libxml2",
+   "note": "ld.lld is linked against it -- for COFF manifests, which no link in this delivery touches -- and a machine whose libxml2 has moved on to another soname cannot start the linker at all. Taken from the pinned sysroot buildtools ships, never from the machine that assembled the delivery.",
+   "prefix": "toolchain/lib/host/libxml2.so.2",
+   "spdx": "MIT"
+  },
+  {
+   "embedded_holders": [
+    "Jean-loup Gailly",
+    "Mark Adler"
+   ],
+   "embedded_reason": "Named in the licence paragraph of the README rather than in a copyright line the scanner recognises.",
+   "license_file": "licenses/ZLIB.LICENSE.TXT",
+   "name": "zlib",
+   "note": "Wanted by ld.lld and by libxml2. From the same pinned sysroot. The licence lives at the end of upstream's README; zlib 1.2.8 ships no separate file, which is why the text here is that README.",
+   "prefix": "toolchain/lib/host/libz.so.1",
+   "spdx": "Zlib"
+  },
+  {
+   "embedded_holders": [
+    "Lasse Collin"
+   ],
+   "embedded_reason": "COPYING names him for the parts that are not public domain; the shipped binary carries no notice of its own.",
+   "license_file": "licenses/LIBLZMA.LICENSE.TXT",
+   "name": "xz",
+   "note": "Wanted by libxml2. From the same pinned sysroot. Upstream places liblzma itself in the public domain and says so in COPYING; 0BSD is the closest SPDX identifier and imposes nothing this delivery does not already do.",
+   "prefix": "toolchain/lib/host/liblzma.so.5",
+   "spdx": "0BSD"
+  },
+  {
+   "license_file": "//garnet/LICENSE",
+   "name": "nebula",
+   "note": "GRT's own record of what the compiler export contains -- the CIPD stamp, the target, a fingerprint and the shared libraries the host tools need. It sits inside toolchain/ and is the one file there nobody at LLVM wrote, so it needs its own entry: the catch-all beside it would ship it under NCSA and name the LLVM Team as the holder of a file they have never seen.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "toolchain/TOOLCHAIN_INFO.json",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "//garnet/LICENSE",
+   "name": "nebula",
+   "note": "GRT's own record of the source set the halves were cut from: which build produced it, and what it held. It sits here rather than in a half because the halves are kept under git and regenerated metadata churns there on every release, belonging to nobody's change.",
+   "owner": "GoldenRiver Technology Co., Ltd.",
+   "prefix": "sources",
+   "spdx": "BSD-3-Clause"
+  },
+  {
+   "license_file": "licenses/CLANG.LICENSE.TXT",
+   "name": "clang",
+   "note": "The compiler driver, under the three names it answers to -- it picks C or C++ from argv[0], and clang++ and clang-7.0 are symlinks here where the prebuilt has two more 78 MB copies. Declared separately from llvm because clang's LICENSE.TXT carries its own copyright line (2007-2018) and the shared NCSA body makes that easy to miss.",
+   "prefix": "toolchain/bin/clang",
+   "spdx": "NCSA"
+  },
+  {
+   "license_file": "licenses/CLANG.LICENSE.TXT",
+   "name": "clang",
+   "note": "The compiler driver, under the three names it answers to -- it picks C or C++ from argv[0], and clang++ and clang-7.0 are symlinks here where the prebuilt has two more 78 MB copies. Declared separately from llvm because clang's LICENSE.TXT carries its own copyright line (2007-2018) and the shared NCSA body makes that easy to miss.",
+   "prefix": "toolchain/bin/clang++",
+   "spdx": "NCSA"
+  },
+  {
+   "license_file": "licenses/CLANG.LICENSE.TXT",
+   "name": "clang",
+   "note": "The compiler driver, under the three names it answers to -- it picks C or C++ from argv[0], and clang++ and clang-7.0 are symlinks here where the prebuilt has two more 78 MB copies. Declared separately from llvm because clang's LICENSE.TXT carries its own copyright line (2007-2018) and the shared NCSA body makes that easy to miss.",
+   "prefix": "toolchain/bin/clang-7.0",
+   "spdx": "NCSA"
+  },
+  {
+   "license_file": "licenses/LLD.LICENSE.TXT",
+   "name": "lld",
+   "note": "The linker, under both its names. clang forks it by name from beside itself, which is why an export without it compiles everything and links nothing. Its copyright line is 'the contributors listed in CREDITS.TXT', 2011-2018 -- neither LLVM core's nor clang's.",
+   "prefix": "toolchain/bin/ld.lld",
+   "spdx": "NCSA"
+  },
+  {
+   "license_file": "licenses/LLD.LICENSE.TXT",
+   "name": "lld",
+   "note": "The linker, under both its names. clang forks it by name from beside itself, which is why an export without it compiles everything and links nothing. Its copyright line is 'the contributors listed in CREDITS.TXT', 2011-2018 -- neither LLVM core's nor clang's.",
+   "prefix": "toolchain/bin/lld",
+   "spdx": "NCSA"
+  },
+  {
+   "license_file": "licenses/LIBCXX.LICENSE.TXT",
+   "name": "libcxx",
+   "note": "The C++ standard library headers. Every one carries the inline notice and points at a LICENSE.TXT the prebuilt does not contain. This is also the ABI boundary that makes the toolchain part of the delivery rather than a convenience: these headers build with _LIBCPP_ABI_VERSION 2, so the delivered archives mangle as std::__2 while a consumer's own upstream clang uses __1, and the two do not link.",
+   "prefix": "toolchain/include/c++/v1",
+   "spdx": "NCSA OR MIT"
+  },
+  {
+   "license_file": "licenses/LIBCXX.LICENSE.TXT",
+   "name": "libcxx-runtime",
+   "note": "libc++.so, libc++abi.so and libunwind.so for the target. The sealed self-test's link traces name all three, which is why they are here and the sanitizer variants beside them are not.",
+   "prefix": "toolchain/lib/aarch64-fuchsia",
+   "spdx": "NCSA OR MIT"
+  },
+  {
+   "embedded_holders": [
+    "Chandler Carruth",
+    "Chris Lattner",
+    "Eli Friedman",
+    "Howard Hinnant"
+   ],
+   "embedded_reason": "107 of the 108 headers here are MIT and carry an individual author's copyright rather than the LLVM Team's; only opencl-c.h is NCSA, which is why the expression is AND and not OR. Each MIT header states the full permission notice inline, including the 'above copyright notice ... shall be included in all copies' clause, so shipping the file is itself what satisfies the attribution -- naming four individuals in the toolchain's own LICENSE text would misdescribe a text they did not write.",
+   "license_file": "licenses/CLANG.LICENSE.TXT",
+   "name": "clang-builtin-headers",
+   "note": "clang's builtin headers: stdint.h, stddef.h, the target intrinsics. Kept whole rather than filtered, because module.modulemap names every one of them and a resource directory that disagrees with its own modulemap is a failure mode nobody would look for.",
+   "prefix": "toolchain/lib/clang/7.0.0/include",
+   "spdx": "NCSA AND MIT"
+  },
+  {
+   "license_file": "licenses/COMPILER_RT.LICENSE.TXT",
+   "name": "compiler-rt",
+   "note": "The compiler runtime. Only libclang_rt.builtins is kept: the link traces take five members of it -- addtf3, comparetf2, floatditf, multf3, subtf3, all software float128 -- and nothing from any other runtime library.",
+   "prefix": "toolchain/lib/clang/7.0.0/lib/fuchsia",
+   "spdx": "NCSA OR MIT"
+  }
+ ],
+ "format_version": 1,
+ "refuse_copyleft": true
+}

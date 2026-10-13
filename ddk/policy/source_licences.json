@@ -1,0 +1,67 @@
+{
+  "format_version": 1,
+  "refuse_copyleft": true,
+  "note": "The licence declaration for the source halves, as they are delivered. It is separate from ddk_licenses.json because that one covers libddk -- a component of headers and archives, laid out by what a driver includes -- while this one covers a source tree laid out by where the code lives. The two answer different questions about the same repository and a single file trying to do both would be read as neither.\n\nOne declaration serves both halves. Which files land in which half is the partition's decision and it moves: a driver reassigned between grt_ddk and mtk_ddk would otherwise need a licence entry moved with it, and the release that forgot would ship a half with an unclaimed file. Each half is scanned separately against this and gets a LICENSES/ and a NOTICE naming only what that half actually holds.\n\nPrefixes are written as the halves are laid out, which is as the tree is: the parts keep the top-level `garnet` name rather than being renamed on the way out.",
+  "attribution_note": "A component's licence text names the licence and its principal holders. Some files carry a notice of their own on top of that -- MediaTek's on the drivers they wrote, ARM's on the virtio MMIO header, Chromium's on the code fxl took from it -- and those travel in the files, which is where the licences ask them to be. Holders named in the files and not in the text are declared below with the reason, so that the gap is a decision rather than an oversight.",
+  "components": [
+    {
+      "prefix": "",
+      "name": "nebula",
+      "spdx": "BSD-3-Clause",
+      "license_file": "//garnet/LICENSE",
+      "owner": "GoldenRiver Technology Co., Ltd.",
+      "note": "GRT's own code and everything a longer prefix does not claim: the drivers, the machina library, the FIDL bindings, the public libraries fxl and app, and the .ddk.mk module descriptions this build generates. The BSD-3-Clause text it points at carries both GRT's copyright and the Fuchsia Authors' one this code derives from.",
+      "embedded_holders": [
+        "MediaTek Inc.",
+        "Mediatek Inc.",
+        "The Chromium Authors",
+        "IBM Corp",
+        "ARM Ltd",
+        "GoldenRiver Inc.",
+        "Goldenriver Inc.",
+        "GoldenRiverTek Authors",
+        "GoldenRiver Technologies Co., Ltd."
+      ],
+      "embedded_reason": "Three different reasons, kept in one list because the mechanism is the same.\n\nMediaTek hold copyright in the drivers they wrote -- UFS, mtk_i2c, mtk_eint, the mt6685 RTC, the MT8676 and MT8678 board code -- and those files are theirs, under the BSD-3-Clause their own SPDX tags name. Their notices stay in the files. Worth recording once: twenty files under src/drivers/block/ufs tag themselves BSD-3-Clause and then reproduce the MIT permission notice in the comment below it. Both are permissive and shipping the source verbatim satisfies either, so nothing here turns on which is meant, but the tag and the text do not agree and that is MediaTek's to correct.\n\nThe Chromium Authors, ARM Ltd and IBM Corp are named in code taken from elsewhere: fxl's service provider from Chromium, and machina's virtio MMIO register offsets from Linux, whose header names ARM and IBM. virtio_mmio.h says so itself, in the comment above the offsets it borrowed, and reproduces the upstream text -- which is the same BSD-3-Clause everything around it is under.\n\nThe rest are GRT's own name written five ways across twenty years of files. They are the same holder as the one the licence text names; the spellings are not worth rewriting across the tree just to make a scanner agree, so they are declared."
+    },
+    {
+      "prefix": "garnet/public/lib/lua/src",
+      "name": "lua",
+      "spdx": "MIT",
+      "license_file": "licenses/LUA.LICENSE.TXT",
+      "owner": "Lua.org, PUC-Rio",
+      "note": "Lua 5.3.3, vendored. Upstream ships no separate licence file: the notice lives at the end of lua.h, and the copy here was checked byte for byte against upstream's own lua.h at tag v5.3.3."
+    },
+    {
+      "prefix": "garnet/public/lib/lua/LuaBridge",
+      "name": "luabridge",
+      "spdx": "MIT",
+      "license_file": "licenses/LUABRIDGE.LICENSE.TXT",
+      "owner": "Vinnie Falco, Dmitry Tarakanov and Nathan Reed",
+      "note": "LuaBridge 2.9, vendored beside the Lua it binds to. Upstream ships no licence file at all -- the sources carry an SPDX tag and no notice -- so the text here is upstream's README licence section reproduced verbatim, followed by the MIT text that tag names.",
+      "embedded_holders": [
+        "Stefan Frings",
+        "Raw Material Software Ltd",
+        "Nigel Atkinson",
+        "Andrei Alexandrescu"
+      ],
+      "embedded_reason": "Contributors of individual headers. Nigel Atkinson and Andrei Alexandrescu are named in the README excerpt; Stefan Frings's Optional.h and the RefCountedObject taken from JUCE carry theirs in the files, which is where MIT asks for them."
+    },
+    {
+      "prefix": "garnet/public/lib/fxl/third_party/icu",
+      "name": "icu",
+      "spdx": "ICU",
+      "license_file": "//garnet/public/lib/fxl/third_party/icu/LICENSE",
+      "owner": "International Business Machines Corporation and others",
+      "note": "The UTF-8/16/32 conversion routines fxl copied out of ICU, renamed into the fxl_icu namespace. Two files, with upstream's LICENSE beside them; README.fuchsia records what was copied and why."
+    },
+    {
+      "prefix": "third_party/littlefs",
+      "name": "littlefs",
+      "spdx": "BSD-3-Clause",
+      "license_file": "//third_party/littlefs/LICENSE.md",
+      "owner": "The littlefs authors",
+      "note": "littlefs 2.11, upstream and unmodified, delivered as source so the filesystem can be built against the DDK. src/lib/littlefs is GRT's vnode layer on top of it and is not this component."
+    }
+  ]
+}

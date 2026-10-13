@@ -1,0 +1,33 @@
+{
+  "format_version": 1,
+  "keep": [
+    {
+      "prefix": "abi",
+      "reason": "The record of the kernel ABI this component was built against. Nothing includes it or links it, so measurement never sees it; it is there to be read when a driver built against one kernel meets another."
+    },
+    {
+      "prefix": "BUILD_INFO.json",
+      "reason": "Which build the component came out of. Nothing compiles it, so measurement never sees it; it is there to answer a question six months later about a delivery nobody remembers -- and the answer is read out of the customer's own copy, which is why the record travels with the delivery instead of living in an archive here that somebody has to keep.\nIt names our repositories, and that was weighed rather than overlooked. A commit is a version number and nothing else: it discloses no layout, which is what the rest of the delivery goes to some length to hide. The names beside them say this derives from Fuchsia, which include/zircon, include/fuchsia, include/fbl and include/ddk already say on the first line of a directory listing. Replacing them with an opaque release digest would close nothing worth closing and would trade a record that is always readable for one that is only as good as an archive nobody has committed to keeping."
+    },
+    {
+      "prefix": "sysroot/include",
+      "reason": "The C library's headers, whole. They are upstream musl and Fuchsia's own ABI, so removing the ones this build did not touch hides nothing -- the same headers are public -- while a consumer who writes #include <stdio.h> breaks. All cost, no benefit."
+    },
+    {
+      "prefix": "sysroot/lib",
+      "reason": "The link-time libraries, whole, including the -lm, -lpthread, -ldl and -lrt stubs. A consumer's link line may name any of them; ours did not."
+    },
+    {
+      "prefix": "include/trusty_app_manifest.h",
+      "reason": "Entry point. A Trusty application includes it to declare its manifest; nothing in the DDK source set does, so measurement never sees it."
+    },
+    {
+      "prefix": "include/nbl_app_manifest.h",
+      "reason": "Entry point, as above, for a Nebula application."
+    },
+    {
+      "prefix": "include/trusty_log.h",
+      "reason": "Entry point: the logging macros a Trusty application uses. Reached from application code we do not build."
+    }
+  ]
+}
