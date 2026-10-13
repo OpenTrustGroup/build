@@ -1,0 +1,42 @@
+{
+  "format_version": 1,
+  "parts": {
+    "grt_ddk": "GRT's half of the delivery: everything MTK does not own.",
+    "mtk_ddk": "MTK's half: the drivers MTK maintains and returns changed."
+  },
+  "default_part": "grt_ddk",
+  "ignore": [
+    ".git",
+    "BUILD_INFO.json",
+    "SDK_CONTENTS.json"
+  ],
+  "rules": [
+    {
+      "prefix": "drivers/block/ufs",
+      "part": "mtk_ddk",
+      "reason": "UFS host controller and its MT8678 glue.  MTK owns the storage stack."
+    },
+    {
+      "prefix": "drivers/i2c/mt8668_i2c",
+      "part": "mtk_ddk",
+      "reason": "MT8678 I2C controller."
+    },
+    {
+      "prefix": "drivers/i2c/mtk_i2c",
+      "part": "mtk_ddk",
+      "reason": "Shared MTK I2C core, used by the per-SoC controllers."
+    },
+    {
+      "prefix": "drivers/spi/mt8668_spi",
+      "part": "mtk_ddk",
+      "reason": "MT8668 SPI controller."
+    },
+    {
+      "prefix": "drivers/spi/mt8676_spi",
+      "part": "mtk_ddk",
+      "reason": "MT8676 SPI controller."
+    }
+  ],
+  "ignore_reason": "Not source. They describe the source set -- which build produced it and what it holds -- and the halves are kept under git by MTK, where regenerated metadata churns on every release and belongs to nobody's change. They travel with the component instead, under libddk/sources.",
+  "rename_reason": "There is none. The parts keep the tree's own top-level name, `garnet`, because MTK asked for it: they read our tree against theirs, and a different name at the top makes every path in a bug report need translating before it can be looked up.\n\nThe argument for renaming was that `garnet` on the top line of a directory listing says which upstream this derives from, and where every file sat in it, to somebody who has never opened the code. partition.py still supports it -- add a `rename` block here -- and it was used for a while. It lost to the argument about paths, which came from the people reading them."
+}
