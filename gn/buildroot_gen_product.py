@@ -128,7 +128,7 @@ def mkbootfs_checked(args, zircon_project: str):
   subprocess.check_call(args, universal_newlines=True)
 
 
-def generate_plid_img(platform: str, product: str, vid: str, pid: str, zircon_project: str) -> dict:
+def generate_plid_img(platform: str, product: str, vid: str, pid: str, sbt: str, zircon_project: str) -> dict:
   outputs = {
       'debug': 'bootdata-plid-{}-{}.bin'.format(platform, product),
       'release': 'bootdata-plid-{}-{}-rel.bin'.format(platform, product),
@@ -136,7 +136,7 @@ def generate_plid_img(platform: str, product: str, vid: str, pid: str, zircon_pr
 
   for variant in ['debug', 'release']:
     args = [
-        '-o', outputs[variant], '--vid', vid, '--pid', pid, '--board', product
+        '-o', outputs[variant], '--vid', vid, '--pid', pid, '--board', product, '--sbt', sbt
     ]
     mkbootfs_checked(args, zircon_project)
 
@@ -278,6 +278,7 @@ def main():
   product = info['product']
   vid = info['vid']
   pid = info['pid']
+  sbt = info['sbt']
   zircon_project = str(info['zircon_project'])
 
   packages = common.PackagesResolver().resolve(packages_home,
@@ -295,7 +296,7 @@ def main():
   bootfs_system = generate_system_bootfs(platform, product, manifests['system'], zircon_project)
   bootdata_fs = generate_bootdata_fs(platform, product, bootfs_boot,
                                      bootfs_system, zircon_project)
-  bootdata_plid = generate_plid_img(platform, product, vid, pid, zircon_project)
+  bootdata_plid = generate_plid_img(platform, product, vid, pid, sbt, zircon_project)
 
   bootdata_combo = generate_combo_image(platform, product, bootdata_fs, bootdata_plid, zircon_project)
 
