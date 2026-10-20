@@ -73,7 +73,7 @@ genrule(
     echo "CROSS_COMPILE: $${CROSS_COMPILE}"
 
     mkdir -p $${ROOTFS_BUILDROOT}
-    cd $${ROOTFS_SRC} && ./generate-cpio-rootfs.sh fvp
+    cd $${ROOTFS_SRC} && ./generate-cpio-rootfs.sh $${TEE_SPD} fvp
     """,
     local = True,
 )
@@ -115,6 +115,7 @@ genrule(
         "@ree//ion_test",
         "@ree//openssl:gen-linux-aarch64",
         "@ree//nbl_rpcd",
+        "@ree//gzfs_fuse:gzfs_d",
         "@scripts//:drmdevice",
         "@scripts//:modetest",
         "@scripts//:libdrm",
@@ -194,6 +195,7 @@ file /bin/nbl_rpcd $$(realpath $(location @ree//nbl_rpcd:nbl_rpcd)) 755 0 0
 file /bin/gp_echo_ca $$(realpath $(location @ree//libnbl_gp/tests/gp_echo_ca:gp_echo_ca)) 755 0 0
 file /bin/gp_ut_ca $$(realpath $(location @ree//libnbl_gp/tests/gp_ut_ca:gp_ut_ca)) 755 0 0
 file /bin/syz-manager $$(realpath $(location @syzkaller_nbl//:syz-manager)) 755 0 0
+file /bin/gzfs_d $$(realpath $(location @ree//gzfs_fuse:gzfs_d)) 755 0 0
 file /lib/libmanager.so $$(realpath $(location @syzkaller_nbl//:libmanager)) 755 0 0
 file /lib/libsyzmanagerrpc.so $$(realpath $(location @syzkaller_nbl//:libsyzmanagerrpc)) 755 0 0
 dir /data 755 0 0
