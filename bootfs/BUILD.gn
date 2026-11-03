@@ -166,10 +166,43 @@ template("bootdata_plid") {
   }
 }
 
+# The /features devicetree of venus-hee on the QEMU board.  Only the QEMU
+# combo image (makecombo("qemu"), bootdata-combo-qemu-virt) gets a
+# BOOTDATA_DEVICETREE item; the bootdata-fs images of real boards carry
+# none, so the `features` library keeps its all-disabled default there.
+# Both targets are defined inside the gate so that other projects do not
+# need `dtc`.
+if (zircon_project == "venus-hee") {
+  features_dts = "features-${zircon_project}-qemu.dts"
+  features_dtb = "$root_out_dir/features-${zircon_project}-qemu.dtb"
+
+  action("features_dtb") {
+    script = "compile-dts.sh"
+    sources = [
+      features_dts,
+    ]
+    outputs = [
+      features_dtb,
+    ]
+    args = [
+      rebase_path(features_dtb, root_build_dir),
+      rebase_path(features_dts, root_build_dir),
+    ]
+  }
+
+  bootdata_devicetree("bootdata-features-qemu") {
+    deps = [
+      ":features_dtb",
+    ]
+    inputs = get_target_outputs(":features_dtb")
+  }
+}
+
 # IMG3 = IMG1 + IMG2 + SHIM
 template("bootdata_combo") {
   suffix_dbg = "-" + target_name + "-${invoker.product}"
   suffix_rel = "-" + target_name + "-${invoker.product}-rel"
+  with_features = zircon_project == "venus-hee" && target_name == "qemu"
 
   bootdata("bootdata-combo" + suffix_dbg) {
     deps = [
@@ -189,6 +222,11 @@ template("bootdata_combo") {
       deps += [ ":extra_cmdline" ]
       inputs += get_target_outputs(":extra_cmdline")
     }
+
+    if (with_features) {
+      deps += [ ":bootdata-features-qemu" ]
+      inputs += get_target_outputs(":bootdata-features-qemu")
+    }
   }
   bootdata("bootdata-combo" + suffix_rel) {
     deps = [
@@ -207,6 +245,11 @@ template("bootdata_combo") {
     if (kernel_cmdline_file != "") {
       deps += [ ":extra_cmdline" ]
       inputs += get_target_outputs(":extra_cmdline")
+    }
+
+    if (with_features) {
+      deps += [ ":bootdata-features-qemu" ]
+      inputs += get_target_outputs(":bootdata-features-qemu")
     }
   }
 

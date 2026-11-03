@@ -213,6 +213,66 @@ template("bootdata_ramdisk") {
   }
 }
 
+# Template for writing a Zircon `bootdata.bin` file containing a devicetree
+# blob.  At runtime the blob is served by the sysinfo driver, which is how
+# the `features` library learns which features are enabled.
+#
+# Parameters
+#
+#   output_name (optional, default: target_name)
+#   output_extension (optional, default: "bin")
+#   deps (usually required)
+#   visibility (optional)
+#   testonly (optional)
+#       Same as for `bootdata`, which see.
+#
+#   inputs (required)
+#       [list of single file] This is a list to match GN conventions, but
+#       it should name a single compiled devicetree blob.  Only one
+#       devicetree may be included in a bootdata file.
+#
+template("bootdata_devicetree") {
+  assert(defined(invoker.inputs), "inputs required for $target_name")
+
+  if (defined(invoker.output_name)) {
+    output_file = invoker.output_name
+  } else {
+    output_file = target_name
+  }
+
+  if (defined(invoker.output_extension)) {
+    if (invoker.output_extension != "") {
+      output_file += ".${invoker.output_extension}"
+    }
+  } else {
+    output_file += ".bin"
+  }
+
+  output_file = "$root_out_dir/$output_file"
+
+  zircon_tool_action(target_name) {
+    forward_variables_from(invoker,
+                           [
+                             "deps",
+                             "inputs",
+                             "visibility",
+                             "testonly",
+                           ])
+    tool = "mkbootfs"
+    outputs = [
+      output_file,
+    ]
+    assert(inputs == [ inputs[0] ],
+           "$target_name inputs must contain exactly one file name")
+    args = [
+      "-o",
+      rebase_path(output_file, root_build_dir),
+      "--devicetree",
+      rebase_path(inputs[0]),
+    ]
+  }
+}
+
 # Template for writing a Zircon `bootdata.bin` file containing Platform ID.
 #
 # Parameters

@@ -1,0 +1,31 @@
+// Copyright 2026 Open Trust Group. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+// The feature set of venus-hee on the QEMU virt board.  It is delivered as a
+// BOOTDATA_DEVICETREE item in bootdata-combo-qemu-virt only, served by the
+// sysinfo driver and read back by //garnet/lib/features.  A feature is
+// enabled by the presence of its node and disabled by its absence or by
+// `status = "disabled"`.  Images for real boards (the mt8668 bootdata-fs)
+// carry no such item and keep their all-disabled default.
+//
+// `fx run-venus -z` boots the SOS Linux with
+// `earlycon=pl011,0xffff32000 console=vmlog-sink0`, and its root file system
+// starts the shell on hvc0:
+//   - vmlog: the VMM's PL011 at 0xffff32000 and the vmlog-sink back end,
+//     which write the SOS console to the HEE debuglog ([VM:n]).
+//   - pci_bus/virtio-console: hvc0, reached with `vmm shell` on the HEE.
+//   - wdt-sink: what venus-hee on QEMU does without a devicetree (its
+//     managed software watchdog); a devicetree without it would turn that off.
+
+/dts-v1/;
+
+/ {
+  features {
+    vmlog { };
+    wdt-sink { };
+    pci_bus {
+      virtio-console { };
+    };
+  };
+};
