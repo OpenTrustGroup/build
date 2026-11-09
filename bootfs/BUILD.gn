@@ -13,6 +13,10 @@ declare_args() {
   # to roll into the final bootable image.  These targets must use the
   # default `output_name` and `output_extension`.
   extra_bootdata = []
+
+  # Build the TEE's services: the secure manager's TSM server and the
+  # signed board license. A system without a TEE (NORA) turns this off.
+  nebula_tee_services = true
 }
 
 # Mark as testonly to be able to depend on //build/gn:* targets.
@@ -280,40 +284,42 @@ template("bootdata_combo") {
   }
 }
 
-# TODO: Define templates and remove third party stuffs when
-# visibility issue of //build/gn:finalize_manifests solved.
-import("//build/grt/BUILD.nbl_tsm_server.generated.gni")
-action("nbl_tsm_server") {
-  inputs = nbl_tsm_server_sources
-  script = "//build/grt/build_secmgr_tsm.sh"
-  output_dir = "$root_out_dir/secmgr"
-  outputs = [
-    "$output_dir",
-  ]
-  deps = [
-    "//build/gn:finalize_manifests",
-    "//garnet/public/nebula_sdk:nebula_export",
-    "//third_party/hee-trusty/nbl_attest_srv:nbl_attest_srv",
-  ]
-}
+if (nebula_tee_services) {
+  # TODO: Define templates and remove third party stuffs when
+  # visibility issue of //build/gn:finalize_manifests solved.
+  import("//build/grt/BUILD.nbl_tsm_server.generated.gni")
+  action("nbl_tsm_server") {
+    inputs = nbl_tsm_server_sources
+    script = "//build/grt/build_secmgr_tsm.sh"
+    output_dir = "$root_out_dir/secmgr"
+    outputs = [
+      "$output_dir",
+    ]
+    deps = [
+      "//build/gn:finalize_manifests",
+      "//garnet/public/nebula_sdk:nebula_export",
+      "//third_party/hee-trusty/nbl_attest_srv:nbl_attest_srv",
+    ]
+  }
 
-# TODO: Define templates and remove third party stuffs.
-import("//build/grt/BUILD.nbl_license_tool.generated.gni")
-action("nebula_license_tool") {
-  inputs = nbl_license_tool_sources
-  script = "//build/grt/build_license_tool.sh"
+  # TODO: Define templates and remove third party stuffs.
+  import("//build/grt/BUILD.nbl_license_tool.generated.gni")
+  action("nebula_license_tool") {
+    inputs = nbl_license_tool_sources
+    script = "//build/grt/build_license_tool.sh"
 
-  # HACK: simply use far to deternmine output dir of host tools
-  output_dir = get_label_info("//garnet/bin/far:bin($host_toolchain)",
-                              "root_out_dir") + "/$target_name"
-  output_bin = "$output_dir/$target_name.jar"
-  outputs = [
-    output_bin,
-  ]
-  args = [
-    rebase_path("//third_party/nbl_license_tool", root_out_dir),
-    rebase_path(output_dir, "//third_party/nbl_license_tool"),
-  ]
+    # HACK: simply use far to deternmine output dir of host tools
+    output_dir = get_label_info("//garnet/bin/far:bin($host_toolchain)",
+                                "root_out_dir") + "/$target_name"
+    output_bin = "$output_dir/$target_name.jar"
+    outputs = [
+      output_bin,
+    ]
+    args = [
+      rebase_path("//third_party/nbl_license_tool", root_out_dir),
+      rebase_path(output_dir, "//third_party/nbl_license_tool"),
+    ]
+  }
 }
 
 template("bootdata_license") {
@@ -378,7 +384,9 @@ template("makecombo") {
   }
 
   # LICENSE = SIGNATURE(VID+PID+BOARDNAME)
-  bootdata_license(target_name) {
+  if (nebula_tee_services) {
+    bootdata_license(target_name) {
+    }
   }
 }
 
@@ -406,9 +414,11 @@ group("bootfs") {
     ":bootdata-combo-qemu-virt-rel",
   ]
 
-  # Licenses
-  deps += [ ":bootdata-license-qemu-virt" ]
+  if (nebula_tee_services) {
+    # Licenses
+    deps += [ ":bootdata-license-qemu-virt" ]
 
-  # Others
-  deps += [ ":nbl_tsm_server" ]
+    # Others
+    deps += [ ":nbl_tsm_server" ]
+  }
 }
