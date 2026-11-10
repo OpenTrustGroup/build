@@ -16,6 +16,22 @@ declare_args() {
   zircon_build_dir = "//out/build-zircon/build-${zircon_project}"
   # GRT: Add dir about zircon release version.
   zircon_release_build_dir = "//out/build-zircon-release/build-${zircon_project}"
+
+  # Whether the code built here is written against Nebula's interface rather
+  # than Zircon's: it then sees Zircon through <zircon/syscalls/nebula.h>
+  # (see //build/config:nebula_api), and Zircon must export the April 2018
+  # libraries and fidlc of its system/legacy (LEGACY_ULIB) in place of its
+  # own.
+  zircon_nebula_api = false
+}
+
+declare_args() {
+  # The JSON schema the output of //zircon/public/tool/fidlc follows.
+  if (zircon_nebula_api) {
+    zircon_fidl_schema = "//zircon/system/legacy/host/fidl/schema.json"
+  } else {
+    zircon_fidl_schema = "//zircon/system/host/fidl/schema.json"
+  }
 }
 
 # Template for running a Zircon host tool as part of the build.

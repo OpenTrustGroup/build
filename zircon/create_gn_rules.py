@@ -311,6 +311,29 @@ class GenerationContext(object):
         self.templates = templates
 
 
+def exports_legacy(package):
+    '''Whether a package is one of Zircon's legacy libraries or tools, from
+       its system/legacy.'''
+    for section in package.values():
+        values = section.values() if isinstance(section, dict) else section
+        if any('/system/legacy/' in value for value in values):
+            return True
+    return False
+
+
+def check_legacy_export(packages, nebula_api):
+    '''Fails unless Zircon exports its legacy libraries exactly when the
+       Fuchsia build uses Nebula's interface.'''
+    legacy = any(exports_legacy(package) for package in packages)
+    if nebula_api and not legacy:
+        raise Exception('zircon_nebula_api = true, but Zircon does not export '
+                        'its legacy libraries: set LEGACY_ULIB := 1 in '
+                        'zircon/local.mk')
+    if legacy and not nebula_api:
+        raise Exception('Zircon exports its legacy libraries (LEGACY_ULIB), '
+                        'but zircon_nebula_api = false')
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--out',
@@ -328,6 +351,12 @@ def main():
     parser.add_argument('--debug',
                         help='Whether to print out debug information',
                         action='store_true')
+    parser.add_argument('--nebula-api',
+                        help='Whether the Fuchsia build uses Nebula\'s '
+                             'interface (zircon_nebula_api), so that Zircon '
+                             'must export its legacy libraries',
+                        choices=['true', 'false'],
+                        default='false')
     args = parser.parse_args()
 
     out_dir = os.path.abspath(args.out)
@@ -363,6 +392,7 @@ def main():
     for file in package_files:
         with open(os.path.join(zircon_dir, 'export', file), 'r') as pkg_file:
             packages.append(parse_package(pkg_file.readlines()))
+    check_legacy_export(packages, args.nebula_api == 'true')
     if debug:
         print('Found %s packages:' % len(packages))
         names = sorted(map(lambda p: p['package']['name'], packages))

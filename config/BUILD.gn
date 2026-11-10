@@ -2,6 +2,8 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//build/config/fuchsia/zircon.gni")
+
 config("compiler") {
   asmflags = []
   cflags = []
@@ -215,3 +217,17 @@ config("optimize_speed") {
   configs = [ ":linker_string_merging" ]
 }
 
+# Code written against Nebula's system call interface sees Zircon's through
+# <zircon/syscalls/nebula.h>, where they differ, and the Nebula interfaces
+# Zircon's libraries offer where ZX_NEBULA_API is defined. Zircon's own
+# libraries, which the generated //zircon/public/lib targets build here, take
+# this config out.
+config("nebula_api") {
+  if (is_fuchsia && zircon_nebula_api) {
+    defines = [ "ZX_NEBULA_API=1" ]
+    cflags = [
+      "-include",
+      "zircon/syscalls/nebula.h",
+    ]
+  }
+}

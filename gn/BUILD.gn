@@ -37,6 +37,7 @@ exec_script("//build/zircon/create_gn_rules.py",
               rebase_path("//out/build-zircon/build-\${zircon_project}"),
               "--zircon-tool-build",
               rebase_path("//out/build-zircon"),
+              "--nebula-api=$zircon_nebula_api",
             ],
             "",
             zircon_files + supporting_templates)

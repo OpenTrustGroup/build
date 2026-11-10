@@ -15,6 +15,10 @@ config("${data.name}_config") {
 }
 
 source_set("${data.name}") {
+  # Zircon's source libraries, the legacy ones too, build against
+  # Zircon's own system call interface.
+  configs -= [ "//build/config:nebula_api" ]
+
   sources = [
     % for _, source in sorted(data.sources.iteritems()):
     "${source}",
